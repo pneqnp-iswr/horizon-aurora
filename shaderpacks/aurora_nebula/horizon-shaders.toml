@@ -1,0 +1,68 @@
+schema = 1
+id = "aurora_nebula"
+name = "Aurora Nebula"
+version = "0.3.0"
+api = "0.1"
+description = "Procedural northern light ribbons, delicate atmospheric tint, soft highlight bloom and restrained cinematic color grading."
+authors = ["Aurora Visuals community experiment"]
+license = "MIT"
+
+[sky]
+file = "sky.wgsl"
+name = "Aurora night sky"
+
+[[post]]
+file = "post/halo.wgsl"
+name = "Soft halo"
+
+[[post]]
+file = "post/grade.wgsl"
+name = "Nebula grade"
+
+[[options]]
+id = "aurora_strength"
+name = "Northern light intensity"
+type = "float"
+default = 0.78
+min = 0.0
+max = 1.0
+step = 0.05
+
+[[options]]
+id = "nebula_strength"
+name = "Sky haze"
+type = "float"
+default = 0.40
+min = 0.0
+max = 1.0
+step = 0.05
+
+[[options]]
+id = "halo_gain"
+name = "Soft glow"
+type = "float"
+default = 0.28
+min = 0.0
+max = 0.8
+step = 0.04
+
+[[options]]
+id = "grade_strength"
+name = "Colour grade"
+type = "float"
+default = 0.42
+min = 0.0
+max = 1.0
+step = 0.05
+
+[[options]]
+id = "vignette_strength"
+name = "Vignette"
+type = "float"
+default = 0.28
+min = 0.0
+max = 0.8
+step = 0.04
+
+[budget]
+gpu_ms = 1.2
