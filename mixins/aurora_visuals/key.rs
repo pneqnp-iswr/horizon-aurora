@@ -3,7 +3,7 @@ fn aurora_key(game: &mut crate::game::Game<'_>, key: &str, pressed: bool) {
     if !pressed || !game.native_window() || !game.native_playing() || !game.native_on(m::ID) { return; }
     // A physical mouse press is an INPUT animation, not a server-confirmed hit.
     let s = m::settings(|k| game.native_setting(m::ID, k));
-    if s.feedback || s.click_flare {
+    if s.feedback || s.click_flare || s.particles {
         match key {
             "key.mouse.left" => m::mouse_press(true),
             "key.mouse.right" => m::mouse_press(false),

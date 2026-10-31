@@ -16,7 +16,7 @@ for key in ('horizon_revision', 'horizon_mixins_revision'):
     assert re.fullmatch(r'[0-9a-f]{40}', compat[key])
 assert manifest['mod']['id'] == 'aurora_visuals'
 version = manifest['mod']['version']
-assert version == cargo['package']['version'] == '0.4.0'
+assert version == cargo['package']['version'] == '0.5.0'
 assert f'pub const VERSION: &str = "{version}";' in source
 assert manifest['compatibility']['horizon_revision'] == compat['horizon_revision']
 expected = {'list', 'settings', 'click', 'hud', 'tick', 'key', 'command', 'visuals', 'commands'}

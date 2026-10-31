@@ -4,7 +4,7 @@ use std::cell::{Cell, RefCell};
 
 pub const ID: &str = "aurora_visuals";
 pub const NAME: &str = "Aurora Visuals";
-pub const VERSION: &str = "0.4.0";
+pub const VERSION: &str = "0.5.0";
 pub const DESCRIPTION: &str = "Native HUD, local aurora light trails, input flares, graphs and accessible visual settings. No combat automation.";
 pub const CORNERS: [(&str, &str); 4] = [
     ("top_left", "Top left"), ("top_right", "Top right"),
@@ -42,6 +42,8 @@ pub struct Settings {
     pub feedback: bool,
     pub ambient: bool,
     pub trail: bool,
+    pub particles: bool,
+    pub soul_particles: bool,
     pub click_flare: bool,
     pub adaptive_quality: bool,
     pub compact: bool,
@@ -53,7 +55,7 @@ impl Default for Settings {
         Self {
             shown: true, corner: 1, theme: 0, preset: 0,
             fps: true, cps: true, keys: true, speed: true, coords: false,
-            graph: true, feedback: true, ambient: false, trail: false, click_flare: true, adaptive_quality: true, compact: false,
+            graph: true, feedback: true, ambient: false, trail: false, particles: true, soul_particles: true, click_flare: true, adaptive_quality: true, compact: false,
             reduced_motion: false,
         }
     }
@@ -113,6 +115,8 @@ impl Settings {
         s.feedback = read_bool("feedback", s.feedback);
         s.ambient = read_bool("ambient", s.ambient);
         s.trail = read_bool("trail", s.trail);
+        s.particles = read_bool("particles", s.particles);
+        s.soul_particles = read_bool("soul_particles", s.soul_particles);
         s.click_flare = read_bool("click_flare", s.click_flare);
         s.adaptive_quality = read_bool("adaptive_quality", s.adaptive_quality);
         s.compact = read_bool("compact", s.compact);
@@ -138,6 +142,8 @@ impl Settings {
             14 => self.trail = !self.trail,
             15 => self.click_flare = !self.click_flare,
             16 => self.adaptive_quality = !self.adaptive_quality,
+            17 => self.particles = !self.particles,
+            18 => self.soul_particles = !self.soul_particles,
             _ => {}
         }
     }
@@ -161,6 +167,8 @@ impl Settings {
             format!("Movement light trails: {}", on(self.trail)),
             format!("Click light flare (input only): {}", on(self.click_flare)),
             format!("Adaptive light quality: {}", on(self.adaptive_quality)),
+            format!("3D flame particles (local): {}", on(self.particles)),
+            format!("Soul-blue particles (else orange): {}", on(self.soul_particles)),
         ]
     }
     pub fn stored(&self) -> Vec<(&'static str, String)> {
@@ -181,6 +189,8 @@ impl Settings {
             ("compact", boolean(self.compact)),
             ("reduced_motion", boolean(self.reduced_motion)),
             ("trail", boolean(self.trail)),
+            ("particles", boolean(self.particles)),
+            ("soul_particles", boolean(self.soul_particles)),
             ("click_flare", boolean(self.click_flare)),
             ("adaptive_quality", boolean(self.adaptive_quality)),
             ("schema", "2".to_owned()),
@@ -196,6 +206,8 @@ thread_local! {
     static WORLD_TICKS: Cell<u32> = const { Cell::new(0) };
     static TRAIL: RefCell<LightTrail> = RefCell::new(LightTrail::default());
     static QUALITY: RefCell<QualityGovernor> = RefCell::new(QualityGovernor::default());
+    static PARTICLE_BURSTS: Cell<u8> = const { Cell::new(0) };
+    static PARTICLE_PATH: RefCell<ParticlePath> = RefCell::new(ParticlePath::default());
 }
 
 pub fn settings(get: impl Fn(&str) -> Option<String>) -> Settings {
@@ -245,8 +257,62 @@ pub fn sample_position(dimension: &str, x: f64, z: f64) {
 pub fn reset_position() {
     MOTION.with(|v| v.borrow_mut().reset());
     TRAIL.with(|v| v.borrow_mut().clear());
+    PARTICLE_BURSTS.with(|v| v.set(0));
+    PARTICLE_PATH.with(|v| v.borrow_mut().reset());
 }
 pub fn movement_bps() -> f64 { MOTION.with(|v| v.borrow().bps) }
+
+
+// A deliberately bounded and entirely client-local particle emitter. Actual
+// Horizon native_flame_particle draws vanilla 3D flame sprites with depth
+// testing: this is NOT lighting, a packet or confirmation of a combat hit.
+#[derive(Clone, Debug, Default)]
+pub struct ParticlePath {
+    previous: Option<[f64; 3]>,
+    dimension: Option<String>,
+    ticks: u32,
+}
+impl ParticlePath {
+    pub fn reset(&mut self) { *self = Self::default(); }
+    pub fn emit(&mut self, dimension: &str, pos: [f64; 3], burst: bool,
+                reduced_motion: bool) -> Vec<[f64; 3]> {
+        if !pos.iter().all(|v| v.is_finite()) { self.reset(); return Vec::new(); }
+        if self.dimension.as_deref() != Some(dimension) {
+            self.reset();
+            self.dimension = Some(dimension.to_owned());
+        }
+        let step = self.previous.map(|previous| {
+            (previous[0] - pos[0]).hypot(previous[1] - pos[1]).hypot(previous[2] - pos[2])
+        }).unwrap_or(0.0);
+        self.previous = Some(pos);
+        self.ticks = self.ticks.wrapping_add(1);
+        if step > 8.0 { self.reset(); self.dimension = Some(dimension.to_owned()); self.previous = Some(pos); return Vec::new(); }
+        let mut out = Vec::with_capacity(7);
+        // A small ring around the local player's feet on mouse input.
+        // A mouse click is NOT proof of a server-confirmed attack or hit.
+        if burst {
+            let count = if reduced_motion { 3 } else { 6 };
+            for i in 0..count {
+                let theta = i as f64 * std::f64::consts::TAU / count as f64;
+                out.push([pos[0] + theta.cos() * 0.68,
+                          pos[1] + 0.10, pos[2] + theta.sin() * 0.68]);
+            }
+        }
+        // At most two step particles per four ticks, only if actually moving.
+        if step > 0.045 && self.ticks % 4 == 0 && !reduced_motion {
+            let phase = self.ticks as f64 * 0.38;
+            out.push([pos[0] + 0.26 * phase.cos(), pos[1] + 0.05,
+                      pos[2] + 0.26 * phase.sin()]);
+            out.push([pos[0] - 0.26 * phase.cos(), pos[1] + 0.05,
+                      pos[2] - 0.26 * phase.sin()]);
+        }
+        out
+    }
+}
+pub fn particle_emissions(dimension: &str, position: [f64; 3], burst: bool,
+                          reduced_motion: bool) -> Vec<[f64; 3]> {
+    PARTICLE_PATH.with(|path| path.borrow_mut().emit(dimension, position, burst, reduced_motion))
+}
 
 pub const HISTORY_CAP: usize = 32;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -283,7 +349,14 @@ impl InputPulse {
     }
 }
 pub fn input_pulse() -> InputPulse { INPUTS.with(Cell::get) }
-pub fn mouse_press(left: bool) { INPUTS.with(|v| { let mut pulse = v.get(); pulse.press(left); v.set(pulse); }); }
+pub fn mouse_press(left: bool) {
+    INPUTS.with(|v| { let mut pulse = v.get(); pulse.press(left); v.set(pulse); });
+    // Consume at most one local click burst each tick to prevent a particle storm.
+    PARTICLE_BURSTS.with(|v| v.set(v.get().saturating_add(1).min(2)));
+}
+pub fn take_particle_burst() -> bool {
+    PARTICLE_BURSTS.with(|v| { let burst = v.get() > 0; v.set(0); burst })
+}
 pub fn sample_frame(fps: u32) {
     let current = WORLD_TICKS.with(|v| { let n = v.get().wrapping_add(1); v.set(n); n });
     if current % 20 == 0 { QUALITY.with(|v| v.borrow_mut().observe(fps)); }
@@ -518,6 +591,20 @@ mod tests {
     use super::*;
     fn measure(s: &str) -> f32 { s.len() as f32 * 6.0 }
 
+    #[test]
+    fn particles_are_bounded_world_local_and_reset_on_teleport() {
+        let mut p = ParticlePath::default();
+        assert!(p.emit("overworld", [1.0, 64.0, 1.0], false, false).is_empty());
+        let a = p.emit("overworld", [1.2, 64.0, 1.1], true, false);
+        assert_eq!(a.len(), 6);
+        assert!(a.iter().all(|q| q.iter().all(|v| v.is_finite())));
+        assert!(p.emit("overworld", [100.0, 64.0, 1.1], true, false).is_empty());
+        assert_eq!(p.emit("nether", [0.0, 50.0, 0.0], true, true).len(), 3);
+        assert!(p.emit("nether", [f64::NAN, 0.0, 0.0], true, false).is_empty());
+        for i in 0..100 {
+            assert!(p.emit("overworld", [i as f64 * 0.2, 64.0, 0.0], true, false).len() <= 8);
+        }
+    }
     #[test]
     fn defaults_and_old_settings_remain_compatible() {
         let s = Settings::read(|_| None);

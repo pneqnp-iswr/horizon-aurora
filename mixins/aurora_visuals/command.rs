@@ -11,7 +11,7 @@ fn aurora_command(game: &mut crate::game::Game<'_>, command: &str, ran: &mut boo
     match (first, second) {
         (None, None) | (Some("help"), None) => {
             game.native_chat("/aurora toggle | preset combat|minimal|streamer | theme violet|cyan|amber|rose|mint|electric|scarlet");
-            game.native_chat("/aurora graph on|off | feedback on|off | ambient on|off | compact on|off | motion on|off | trail on|off | flare on|off | adaptive on|off | reset");
+            game.native_chat("/aurora graph|feedback|ambient|compact|motion|trail|flare|adaptive|particles on|off | fire soul|flame | reset");
             return;
         }
         (Some("toggle"), None) => s.shown = !s.shown,
@@ -20,11 +20,18 @@ fn aurora_command(game: &mut crate::game::Game<'_>, command: &str, ran: &mut boo
             if let Some(index) = m::PRESETS.iter().position(|p| p.0 == value) { s.apply_preset(index); }
             else { game.native_chat("Aurora: unknown preset."); return; }
         }
+        (Some("fire"), Some(value)) => {
+            match value {
+                "soul" => s.soul_particles = true,
+                "flame" => s.soul_particles = false,
+                _ => { game.native_chat("Aurora: use fire soul or fire flame."); return; },
+            }
+        }
         (Some("theme"), Some(value)) => {
             if let Some(index) = m::THEMES.iter().position(|t| t.0 == value) { s.theme = index; }
             else { game.native_chat("Aurora: unknown theme."); return; }
         }
-        (Some(field @ ("graph" | "feedback" | "ambient" | "compact" | "motion" | "trail" | "flare" | "adaptive")), Some(value)) => {
+        (Some(field @ ("graph" | "feedback" | "ambient" | "compact" | "motion" | "trail" | "flare" | "adaptive" | "particles")), Some(value)) => {
             let flag = match value { "on" => true, "off" => false, _ => {
                 game.native_chat("Aurora: use on or off."); return;
             } };
@@ -37,6 +44,7 @@ fn aurora_command(game: &mut crate::game::Game<'_>, command: &str, ran: &mut boo
                 "trail" => s.trail = flag,
                 "flare" => s.click_flare = flag,
                 "adaptive" => s.adaptive_quality = flag,
+                "particles" => s.particles = flag,
                 _ => unreachable!(),
             }
         }

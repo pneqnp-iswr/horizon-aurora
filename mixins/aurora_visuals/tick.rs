@@ -4,6 +4,15 @@ fn aurora_tick(game: &mut crate::game::Game<'_>) {
     if let Some(player) = game.native_player() {
         m::sample_position(player.dimension, player.x, player.z);
         m::trail_sample(player.dimension, [player.x, player.y + 0.2, player.z]);
+        let s = m::settings(|key| game.native_setting(m::ID, key));
+        let burst = m::take_particle_burst();
+        if s.particles {
+            let positions = m::particle_emissions(
+                player.dimension, [player.x, player.y, player.z], burst, s.reduced_motion);
+            for at in positions.into_iter().take(8) {
+                game.native_flame_particle(at, s.soul_particles);
+            }
+        }
         m::sample_frame(game.native_frame_rate().0);
     } else {
         m::reset_position();

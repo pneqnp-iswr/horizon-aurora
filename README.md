@@ -1,4 +1,6 @@
-# Horizon Aurora — experimental native visuals for Horizon (v0.4.0)
+> **What is new in v0.5.0:** Actual client-only 3D flame particles using Horizon's native particle API, not just player glow. Blue soul-flame ring on each local mouse click and a bounded 2-particle footstep trail while moving. No game packets, no hit-detection claims. Enabled by default; use `/aurora particles off` or `/aurora fire flame` to switch colors. Visible in the world, separate from the Aurora Nebula shader pack. Full Linux native compile / in-game performance verification is tracked by GitHub Actions.
+
+# Horizon Aurora — experimental native visuals for Horizon (v0.5.0)
 
 The development home is **https://github.com/pneqnp-iswr/horizon-aurora**. Changes should be proposed through pull requests and recorded in the changelog.
 
@@ -183,3 +185,7 @@ powershell -NoProfile -File .\scripts\windows\aurora-native-preflight.ps1
 ```
 
 For cleanup and memory/stack-process recovery, see [Windows build recovery](docs/WINDOWS_BUILD_RECOVERY.md). Research notes: [Competitive technical audit](docs/COMPETITIVE_TECHNICAL_AUDIT.md).
+
+## Visible local 3D particles (0.5.0)
+
+Use `/aurora particles on` to enable. Each click produces 3–6 vanilla flame particles around your feet; walking emits no more than two every four ticks. `/aurora fire soul` (blue) and `/aurora fire flame` (orange) choose a Minecraft-native particle. Both survive without a shaderpack and do not rely on fake screen brightness. The effect is client-local; the actual gameplay status and FPS cost must be checked on Windows. Night-sky visuals are independent: select Aurora Nebula in Horizon's shader pack menu.
