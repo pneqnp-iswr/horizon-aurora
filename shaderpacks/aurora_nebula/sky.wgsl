@@ -3,6 +3,7 @@
 // clouds are drawn above this stage, respecting weather and game time.
 override aurora_strength: f32 = 0.78;
 override nebula_strength: f32 = 0.40;
+override starfield_strength: f32 = 0.50;
 
 fn sky(input: SkyInput) -> vec4<f32> {
     let d = input.direction;
@@ -33,7 +34,17 @@ fn sky(input: SkyInput) -> vec4<f32> {
     let mist = mix(vec3<f32>(0.05, 0.22, 0.27),
                    vec3<f32>(0.19, 0.07, 0.31), shift) * haze;
     let deepening = 1.0 - night * 0.37;
-    let rgb = clamp(input.color.rgb * deepening + curtain + mist,
-                    vec3<f32>(0.0), vec3<f32>(1.0));
-    return vec4<f32>(rgb, input.color.a);
+    var rgb = input.color.rgb * deepening + curtain + mist;
+    // Directional star cells, seeded consistently by view direction.
+    // No textures or buffers; only runs when enabled and at night.
+    if (starfield_strength > 0.0) {
+        let cell = floor(vec2<f32>(d.x * 480.0 + d.z * 173.0, d.y * 420.0));
+        let seed = fract(sin(dot(cell, vec2<f32>(127.1, 311.7))) * 43758.5453);
+        let star = smoothstep(0.995, 0.9996, seed);
+        let sky_mask = smoothstep(0.12, 0.35, d.y);
+        let sparkle = 0.72 + 0.28 * sin(frame.time * 0.65 + seed * 21.0);
+        rgb += vec3<f32>(0.65, 0.82, 1.0) *
+            (star * sky_mask * sparkle * night * max(weather, 0.05) * starfield_strength);
+    }
+    return vec4<f32>(clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0)), input.color.a);
 }

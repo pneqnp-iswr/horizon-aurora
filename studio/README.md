@@ -5,3 +5,6 @@ The original Aurora Studio 0.3 browser prototype exists in the development sourc
 **Status of this branch:** the native Rust core and shader sources are being imported first. Until the full HTML source has been transferred and checked against the snapshot, do not describe the Studio web application as included in the repository, or as an in-game GUI.
 
 The Studio's profile schema is also **not** wired to the native mod yet. A schema bridge, tests and integration are tracked in the roadmap.
+
+
+Original v0.3 interactive browser prototype is now committed as studio/aurora-studio.html. It is a separate design lab, not yet the in-game Horizon menu.

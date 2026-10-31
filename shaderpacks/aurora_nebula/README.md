@@ -1,4 +1,4 @@
-# Aurora Nebula 0.3.0 — experimental Shader API 0.1 pack
+# Aurora Nebula 0.4.0 — experimental Shader API 0.1 pack
 
 Three independent Horizon shader stages:
 

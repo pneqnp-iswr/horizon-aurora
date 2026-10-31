@@ -1,12 +1,12 @@
-# Horizon Aurora — experimental native visuals for Horizon (v0.3.0)
+# Horizon Aurora — experimental native visuals for Horizon (v0.4.0)
 
 The development home is **https://github.com/pneqnp-iswr/horizon-aurora**. Changes should be proposed through pull requests and recorded in the changelog.
 
 A **community experimental Rust native mod** for Horizon, targeting Minecraft 26.3. The `.hnmod` is **readable source packed for the Horizon launcher**, not a precompiled binary or a Java/Fabric/Forge mod.
 
-> **Status (1 November 2026):** source bundle packaged and offline metadata tests passed. The Rust crate and the Horizon game were **not compiled or launched** in this authoring environment (no Rust toolchain/network). The first game build is expected to be performed on a test computer. Do not call this a validated gameplay release.
+> **Status (1 November 2026):** v0.3.0 RC1 passed full official Horizon Linux native compile and WGSL validation. v0.4.0 adds a procedural starfield, committed Studio demo and Windows build diagnostics. Actual Windows gameplay and performance are still unverified.
 
-## What's available in 0.3.0
+## What's available in 0.4.0
 
 - A distinct Aurora HUD with accent stripe, layered rows, dynamically measured font widths, compact mode and corner stacking.
 - Seven themes: **violet / cyan / amber / rose / mint / electric / scarlet**.
@@ -36,34 +36,33 @@ A second artifact ships under `shaderpacks/aurora_nebula/`: a native Horizon
 Shader API **0.1** WGSL pack with `sky` and two `post` stages. It should add
 procedural aurora ribbons, night haze, one-pass highlight halo and cinematic
 color grading. The pack structure and option names pass **offline checks**,
-but **the Horizon `horizon-shader check` validator and game have not yet run**.
+and the new shader is checked through the official Horizon validator in GitHub CI; real gameplay remains unverified.
 The official Horizon reference already documents and exposes these stage
 hooks, unlike Iris's shader-pack format. **As of the current API docs, the game
-may still use only the WGSL default values for shader options**, so the five
+may still use only the WGSL default values for shader options**, so the six
 values in the manifest should not be mistaken for a confirmed in-game slider UI.
 
 To validate with Horizon's tool:
 
 ```powershell
-horizon-shader check "C:\Aurora\aurora-horizon-v0.3.0\shaderpacks\aurora_nebula"
+horizon-shader check "C:\Aurora\aurora-horizon-v0.4.0\shaderpacks\aurora_nebula"
 ```
 
 If it passes, place the `aurora_nebula` folder or its `.hshader` in
 `shaderpacks/` beside the Horizon instance's `options.txt`. Select it under
 **Options → Horizon Settings → Shader Packs**; the game will run its own
 validation. Never claim a successful shader build without the output of that
-checker. The `.hshader` included here is hand-packaged using the documented
-layout, *not* built with Horizon's checker. Read
+checker. CI constructs release shaders with the official Horizon packager after validation. Read
 `shaderpacks/aurora_nebula/README.md` for limitations.
 
 ## Install/test on Windows
 
 1. Get an up-to-date **official Horizon launcher** from [playhorizon.dev](https://playhorizon.dev/) and prepare a licensed Minecraft 26.3 installation once.
-2. Extract the source ZIP to `C:\Aurora\aurora-horizon-v0.3.0` (the ZIP contains a root folder).
+2. Extract the source ZIP to `C:\Aurora\aurora-horizon-v0.4.0` (the ZIP contains a root folder).
 3. Open PowerShell in the directory containing `horizon-launcher.exe` and run:
 
    ```powershell
-   .\horizon-launcher.exe native-build "C:\Aurora\aurora-horizon-v0.3.0\mixins\aurora_visuals" --trust-native-code
+   .\horizon-launcher.exe native-build "C:\Aurora\aurora-horizon-v0.4.0\mixins\aurora_visuals" --trust-native-code
    ```
 
    Native code executes with your OS user permissions. **Review the full source first.** The native build uses a separate game instance. The first build may download toolchains and compile the game, requiring significant disk space. The launcher can also accept the `.hnmod` if local native-mod installation is supported in its UI.
@@ -124,7 +123,7 @@ python3 native/tools/native.py check aurora
 python3 native/tools/native.py build aurora
 ```
 
-This checks the complete Horizon integration using the commit pinned in `compatibility.json`, not just the isolated Rust logic. For a future Nightly try `python3 native/tools/native.py check aurora --horizon latest` after you have confirmed its API is at least 46. CI configuration is provided in `.github/workflows/verify.yml` but **CI is not running until published to a repository**.
+This checks the complete Horizon integration using the commit pinned in `compatibility.json`, not just the isolated Rust logic. For a future Nightly try `python3 native/tools/native.py check aurora --horizon latest` after you have confirmed its API is at least 46. CI runs on main with official Horizon native integration and WGSL validation.
 
 ## Field-test checklist
 
@@ -170,8 +169,17 @@ The `.hnmod` is a **source bundle**, not a binary DLL or precompiled game. Local
 
 ## Repository and release integrity
 
-- `master` is the stable integration branch; use review branches / PRs for source imports and changes.
-- GitHub Actions is a proposed independent checker, not evidence of passing until its actual run is green.
+- `main` is canonical for source and pre-releases. The GitHub default branch may need to be changed from `master` in repository settings.
+- GitHub Actions must pass for pre-release; actual Windows gameplay testing is a separate gate.
 - Historical v0.1.0/v0.2.0 source snapshots are retained under `history/` after repository import.
 - Do **not** distribute the experimental `.hnmod` or `.hshader` as a game-tested release without matching integration checks.
 - See `docs/PROJECT_STATUS.md` and `docs/RELEASE_POLICY.md` for the exact evidence state and promotion gates.
+## Windows build disk diagnostics
+
+The screenshots of local Windows build failure show os error 112 (disk full). The native build may consume multiple GiB; make at least 8–10 GiB free for headroom. To check the build drive and relevant logs without deleting anything:
+
+```powershell
+powershell -NoProfile -File .\scripts\windows\aurora-native-preflight.ps1
+```
+
+For cleanup and memory/stack-process recovery, see [Windows build recovery](docs/WINDOWS_BUILD_RECOVERY.md). Research notes: [Competitive technical audit](docs/COMPETITIVE_TECHNICAL_AUDIT.md).

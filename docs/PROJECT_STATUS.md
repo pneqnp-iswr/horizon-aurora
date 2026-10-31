@@ -22,3 +22,10 @@ The v0.3.0 code has been produced in the current Aurora development session. Thi
 Input pulses only prove physical clicks. They do **not** prove that the server accepted a hit, dealt damage or identified a target. Browser Studio is a separate prototype and does not imply the game has a premium ClickGUI.
 
 Keep upstream code, proprietary assets, third-party shaders, and commercial mod contents out of this repository unless their licenses explicitly permit inclusion.
+
+
+## 2026-11-01: Windows build recovery / v0.4.0 candidate
+
+- User screenshot confirms disk exhaustion (os error 112), with additional compiler stack/process errors to recheck after freeing space.
+- Added read-only native-build preflight; deletion of intermediate files requires explicit opt-in.
+- Added procedural starfield, committed browser Studio, Windows CI smoke tests and researched VFX roadmap. Gameplay and GPU timings remain unverified.

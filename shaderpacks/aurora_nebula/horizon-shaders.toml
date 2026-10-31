@@ -1,7 +1,7 @@
 schema = 1
 id = "aurora_nebula"
 name = "Aurora Nebula"
-version = "0.3.0"
+version = "0.4.0"
 api = "0.1"
 description = "Procedural northern light ribbons, delicate atmospheric tint, soft highlight bloom and restrained cinematic color grading."
 authors = ["Aurora Visuals community experiment"]
@@ -24,6 +24,16 @@ id = "aurora_strength"
 name = "Northern light intensity"
 type = "float"
 default = 0.78
+min = 0.0
+max = 1.0
+step = 0.05
+
+[[options]]
+id = "starfield_strength"
+name = "Night sky starfield"
+description = "Sparse procedural stars, visible only at night above the horizon."
+type = "float"
+default = 0.50
 min = 0.0
 max = 1.0
 step = 0.05

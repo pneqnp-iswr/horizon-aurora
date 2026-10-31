@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0 RC1 — 2026-11-01
+
+- Added optional procedural night-sky starfield (WGSL, six shader options).
+- Committed the interactive Aurora Studio browser prototype.
+- Added Windows disk/log preflight with explicit safe-cache cleanup and Windows CI smoke tests.
+- Documented resource exhaustion and a source-backed premium visual-mod research plan.
+- Linux official native compile and WGSL checks gate pre-release; Windows gameplay, audio and frame timing still require direct tests.
+
+# Changelog
+
 ## 0.2.0 — experimental source candidate (2026-11-01)
 
 - Added five theme palettes; Rose and Mint join Violet, Cyan and Amber.

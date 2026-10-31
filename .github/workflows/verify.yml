@@ -54,32 +54,44 @@ jobs:
       - name: Collect verified source bundles
         run: |
           mkdir -p dist
-          cp /tmp/horizon-mods/native/target/aurora_visuals-0.3.0.hnmod dist/
-          cp shaderpacks/aurora_nebula-0.3.0.hshader dist/
+          cp /tmp/horizon-mods/native/target/aurora_visuals-0.4.0.hnmod dist/
+          cp shaderpacks/aurora_nebula-0.4.0.hshader dist/
           cd dist
           sha256sum *.hnmod *.hshader > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: aurora-v0.3.0-verified-bundles
+          name: aurora-v0.4.0-verified-bundles
           path: dist/*
           if-no-files-found: error
+
+  windows-preflight:
+    name: Verify Windows build diagnostics
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Windows PowerShell preflight smoke tests
+        shell: pwsh
+        run: ./tests/windows-preflight-smoke.ps1
 
   publish-prerelease:
     name: Publish tested source-bundle prerelease
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: source-and-integration
+    needs: [source-and-integration, windows-preflight]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: aurora-v0.3.0-verified-bundles
+          name: aurora-v0.4.0-verified-bundles
           path: dist
       - name: Publish only after all official integration checks succeed
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: v0.3.0-rc.1
+          TAG: v0.4.0-rc.1
         run: |
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Prerelease $TAG already exists; leaving published assets unchanged."
@@ -88,6 +100,6 @@ jobs:
           gh release create "$TAG" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Aurora Visuals v0.3.0 RC1" \
+            --title "Aurora Visuals v0.4.0 RC1" \
             --prerelease \
             --notes "Experimental Horizon native source bundle and WGSL shader pack. Official native integration and shader validation pass in CI; gameplay testing is still required. Do not install untrusted native code."

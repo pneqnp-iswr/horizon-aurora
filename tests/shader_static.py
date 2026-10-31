@@ -24,4 +24,4 @@ for option in c['options']:
     assert occurrences==1,(option['id'],occurrences)
 assert len(files)==len(stages)
 assert len(list(p.rglob('*.wgsl')))==len(files)
-print('PASS: shaderpack schema, 3 WGSL stages, 5 overrides and file limits (no naga validation)')
+print(f'PASS: shaderpack schema, {len(stages)} WGSL stages, {len(opts)} overrides and file limits (no naga validation)')
