@@ -380,7 +380,7 @@ pub fn panel(s: Settings, reading: Reading, history: FrameHistory, inputs: Input
     }
     let mut y = header + rows.len() as f32 * line;
     if s.graph {
-        shapes.push(Shape::Text("FPS HISTORY", [10.0, y + 4.0], MUTED, false));
+        shapes.push(Shape::Text("FPS HISTORY".into(), [10.0, y + 4.0], MUTED, false));
         let gy = y + 16.0;
         let gx = 10.0;
         let gw = width - 20.0;
@@ -402,7 +402,7 @@ pub fn panel(s: Settings, reading: Reading, history: FrameHistory, inputs: Input
         y += graph_h;
     }
     if s.feedback {
-        shapes.push(Shape::Text("INPUT FX", [10.0, y + 5.0], MUTED, false));
+        shapes.push(Shape::Text("INPUT FX".into(), [10.0, y + 5.0], MUTED, false));
         let right = width - 10.0;
         for (i, level) in [inputs.left, inputs.right].iter().enumerate() {
             let x = right - (2 - i) as f32 * 30.0;
