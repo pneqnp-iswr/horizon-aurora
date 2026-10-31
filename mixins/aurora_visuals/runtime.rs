@@ -4,7 +4,7 @@ use std::cell::{Cell, RefCell};
 
 pub const ID: &str = "aurora_visuals";
 pub const NAME: &str = "Aurora Visuals";
-pub const VERSION: &str = "0.5.0";
+pub const VERSION: &str = "0.6.0";
 pub const DESCRIPTION: &str = "Native HUD, local aurora light trails, input flares, graphs and accessible visual settings. No combat automation.";
 pub const CORNERS: [(&str, &str); 4] = [
     ("top_left", "Top left"), ("top_right", "Top right"),
@@ -26,6 +26,8 @@ pub const PANEL_BG: u32 = 0xE010131E;
 pub const ROW_BG: u32 = 0xA0283042;
 pub const TEXT: u32 = 0xF3F3FF;
 pub const MUTED: u32 = 0xA5AFC1;
+pub const BURST_STYLES: [&str; 3] = ["ring", "burst", "spiral"];
+pub const TRAIL_STYLES: [&str; 4] = ["off", "line", "twin", "helix"];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Settings {
@@ -44,6 +46,9 @@ pub struct Settings {
     pub trail: bool,
     pub particles: bool,
     pub soul_particles: bool,
+    pub burst_style: usize,
+    pub trail_style: usize,
+    pub particle_crown: bool,
     pub click_flare: bool,
     pub adaptive_quality: bool,
     pub compact: bool,
@@ -55,7 +60,7 @@ impl Default for Settings {
         Self {
             shown: true, corner: 1, theme: 0, preset: 0,
             fps: true, cps: true, keys: true, speed: true, coords: false,
-            graph: true, feedback: true, ambient: false, trail: false, particles: true, soul_particles: true, click_flare: true, adaptive_quality: true, compact: false,
+            graph: true, feedback: true, ambient: false, trail: false, particles: true, soul_particles: true, burst_style: 0, trail_style: 1, particle_crown: false, click_flare: true, adaptive_quality: true, compact: false,
             reduced_motion: false,
         }
     }
@@ -117,6 +122,9 @@ impl Settings {
         s.trail = read_bool("trail", s.trail);
         s.particles = read_bool("particles", s.particles);
         s.soul_particles = read_bool("soul_particles", s.soul_particles);
+        s.burst_style = choose("burst_style", &BURST_STYLES, 0);
+        s.trail_style = choose("trail_style", &TRAIL_STYLES, 1);
+        s.particle_crown = read_bool("particle_crown", s.particle_crown);
         s.click_flare = read_bool("click_flare", s.click_flare);
         s.adaptive_quality = read_bool("adaptive_quality", s.adaptive_quality);
         s.compact = read_bool("compact", s.compact);
@@ -144,6 +152,9 @@ impl Settings {
             16 => self.adaptive_quality = !self.adaptive_quality,
             17 => self.particles = !self.particles,
             18 => self.soul_particles = !self.soul_particles,
+            19 => self.burst_style = (self.burst_style + 1) % BURST_STYLES.len(),
+            20 => self.trail_style = (self.trail_style + 1) % TRAIL_STYLES.len(),
+            21 => self.particle_crown = !self.particle_crown,
             _ => {}
         }
     }
@@ -169,6 +180,9 @@ impl Settings {
             format!("Adaptive light quality: {}", on(self.adaptive_quality)),
             format!("3D flame particles (local): {}", on(self.particles)),
             format!("Soul-blue particles (else orange): {}", on(self.soul_particles)),
+            format!("Click pattern: {}", BURST_STYLES[self.burst_style]),
+            format!("Movement pattern: {}", TRAIL_STYLES[self.trail_style]),
+            format!("Particle crown: {}", on(self.particle_crown)),
         ]
     }
     pub fn stored(&self) -> Vec<(&'static str, String)> {
@@ -191,6 +205,9 @@ impl Settings {
             ("trail", boolean(self.trail)),
             ("particles", boolean(self.particles)),
             ("soul_particles", boolean(self.soul_particles)),
+            ("burst_style", BURST_STYLES[self.burst_style].into()),
+            ("trail_style", TRAIL_STYLES[self.trail_style].into()),
+            ("particle_crown", boolean(self.particle_crown)),
             ("click_flare", boolean(self.click_flare)),
             ("adaptive_quality", boolean(self.adaptive_quality)),
             ("schema", "2".to_owned()),
@@ -263,55 +280,106 @@ pub fn reset_position() {
 pub fn movement_bps() -> f64 { MOTION.with(|v| v.borrow().bps) }
 
 
-// A deliberately bounded and entirely client-local particle emitter. Actual
-// Horizon native_flame_particle draws vanilla 3D flame sprites with depth
-// testing: this is NOT lighting, a packet or confirmation of a combat hit.
+// Client-only visuals. The shape taxonomy, bounded history and Catmull-Rom
+// sampling were informed by MIT-licensed PulseVisual (docs/PULSEVISUAL_PORT.md).
+// Input pulses are not confirmed attacks and never send server packets.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FxParticle { pub pos: [f64; 3], pub soul: bool }
+
+/// Cubic midpoint interpolation, with endpoints clamped at world changes.
+pub fn catmull_rom(a: f64, b: f64, c: f64, d: f64, t: f64) -> f64 {
+    let t = t.clamp(0.0,1.0);
+    0.5*((2.0*b) + (c-a)*t + (2.0*a-5.0*b+4.0*c-d)*t*t
+        + (-a+3.0*b-3.0*c+d)*t*t*t)
+}
+/// Smoothstep attack/release curve for cosmetic input animation.
+pub fn fx_envelope(t: f32, peak: f32) -> f32 {
+    let p = peak.clamp(0.15,0.80);
+    let u = if t < p { t/p } else { (1.0-t)/(1.0-p) };
+    let u = u.clamp(0.0,1.0);
+    u*u*(3.0-2.0*u)
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct ParticlePath {
     previous: Option<[f64; 3]>,
+    older: Option<[f64; 3]>,
     dimension: Option<String>,
     ticks: u32,
 }
 impl ParticlePath {
     pub fn reset(&mut self) { *self = Self::default(); }
-    pub fn emit(&mut self, dimension: &str, pos: [f64; 3], burst: bool,
-                reduced_motion: bool) -> Vec<[f64; 3]> {
-        if !pos.iter().all(|v| v.is_finite()) { self.reset(); return Vec::new(); }
+    pub fn emit(&mut self, dimension: &str, pos: [f64;3], burst: bool, s: Settings, quality: u8) -> Vec<FxParticle> {
+        let mut out = Vec::with_capacity(10);
+        if !pos.iter().all(|v|v.is_finite()) { self.reset(); return out; }
         if self.dimension.as_deref() != Some(dimension) {
             self.reset();
             self.dimension = Some(dimension.to_owned());
         }
-        let step = self.previous.map(|previous| {
-            (previous[0] - pos[0]).hypot(previous[1] - pos[1]).hypot(previous[2] - pos[2])
-        }).unwrap_or(0.0);
-        self.previous = Some(pos);
+        let old = self.previous;
+        let step = old.map(|p| (pos[0]-p[0]).hypot(pos[1]-p[1]).hypot(pos[2]-p[2])).unwrap_or(0.0);
+        if step > 8.0 {
+            self.reset();
+            self.dimension = Some(dimension.to_owned());
+            self.previous = Some(pos);
+            return out;
+        }
         self.ticks = self.ticks.wrapping_add(1);
-        if step > 8.0 { self.reset(); self.dimension = Some(dimension.to_owned()); self.previous = Some(pos); return Vec::new(); }
-        let mut out = Vec::with_capacity(7);
-        // A small ring around the local player's feet on mouse input.
-        // A mouse click is NOT proof of a server-confirmed attack or hit.
+        self.previous = Some(pos);
+        let cap: usize = if s.reduced_motion { 3 } else { [2,4,6,10][quality.min(3) as usize] };
+        let mut push = |at:[f64;3], soul:bool| {
+            if out.len()<cap && at.iter().all(|v|v.is_finite()) { out.push(FxParticle { pos:at, soul }); }
+        };
         if burst {
-            let count = if reduced_motion { 3 } else { 6 };
+            let count = if s.reduced_motion { 3 } else { 6 };
             for i in 0..count {
-                let theta = i as f64 * std::f64::consts::TAU / count as f64;
-                out.push([pos[0] + theta.cos() * 0.68,
-                          pos[1] + 0.10, pos[2] + theta.sin() * 0.68]);
+                let angle = std::f64::consts::TAU * i as f64 / count as f64;
+                let (x,y,z) = match s.burst_style.min(2) {
+                    0 => (angle.cos()*0.68, 0.12, angle.sin()*0.68),
+                    1 => { let r=0.16 + 0.09*(i%3) as f64;
+                           (angle.cos()*r, 0.20+0.22*(i%3) as f64, angle.sin()*r) },
+                    _ => { let r=0.20 + i as f64*0.075;
+                           (angle.cos()*r, 0.15+i as f64*0.19, angle.sin()*r) },
+                };
+                let soul = if s.burst_style==1 && i%2==1 { !s.soul_particles } else { s.soul_particles };
+                push([pos[0]+x,pos[1]+y,pos[2]+z], soul);
             }
         }
-        // At most two step particles per four ticks, only if actually moving.
-        if step > 0.045 && self.ticks % 4 == 0 && !reduced_motion {
-            let phase = self.ticks as f64 * 0.38;
-            out.push([pos[0] + 0.26 * phase.cos(), pos[1] + 0.05,
-                      pos[2] + 0.26 * phase.sin()]);
-            out.push([pos[0] - 0.26 * phase.cos(), pos[1] + 0.05,
-                      pos[2] - 0.26 * phase.sin()]);
+        if step>0.045 && !s.reduced_motion && self.ticks%3==0 {
+            let from=old.unwrap_or(pos);
+            let prev=self.older.unwrap_or(from);
+            let mid = [0,1,2].map(|axis| catmull_rom(prev[axis],from[axis],pos[axis],pos[axis],0.5));
+            let dx=pos[0]-from[0]; let dz=pos[2]-from[2];
+            let norm=dx.hypot(dz);
+            let (nx,nz)=if norm>1e-7 { (-dz/norm,dx/norm) } else {(1.0,0.0)};
+            match s.trail_style.min(3) {
+                1 => push([mid[0],mid[1]+0.1,mid[2]],s.soul_particles),
+                2 => {
+                    push([mid[0]+nx*0.34,mid[1]+0.1,mid[2]+nz*0.34],s.soul_particles);
+                    push([mid[0]-nx*0.34,mid[1]+0.1,mid[2]-nz*0.34],!s.soul_particles);
+                },
+                3 => {
+                    let a = self.ticks as f64*0.45;
+                    push([mid[0]+a.cos()*0.4,mid[1]+0.2+(1.0+a.sin())*0.3,mid[2]+a.sin()*0.4],s.soul_particles);
+                    push([mid[0]-a.cos()*0.4,mid[1]+0.2+(1.0-a.sin())*0.3,mid[2]-a.sin()*0.4],!s.soul_particles);
+                },
+                _ => {}
+            }
         }
+        // Lightweight particle crown, not a filled 3D China-Hat mesh.
+        if s.particle_crown && !s.reduced_motion && self.ticks%10==0 {
+            for i in 0..6 {
+                let a=std::f64::consts::TAU*i as f64/6.0 + self.ticks as f64*0.03;
+                push([pos[0]+a.cos()*0.53,pos[1]+2.15,pos[2]+a.sin()*0.53],s.soul_particles);
+            }
+        }
+        self.older=old;
         out
     }
 }
-pub fn particle_emissions(dimension: &str, position: [f64; 3], burst: bool,
-                          reduced_motion: bool) -> Vec<[f64; 3]> {
-    PARTICLE_PATH.with(|path| path.borrow_mut().emit(dimension, position, burst, reduced_motion))
+pub fn particle_emissions(dimension:&str,pos:[f64;3],burst:bool,s:Settings)->Vec<FxParticle>{
+    let quality=if s.adaptive_quality {QUALITY.with(|q|q.borrow().level)} else {3};
+    PARTICLE_PATH.with(|path|path.borrow_mut().emit(dimension,pos,burst,s,quality))
 }
 
 pub const HISTORY_CAP: usize = 32;
@@ -439,7 +507,7 @@ pub fn panel(s: Settings, reading: Reading, history: FrameHistory, inputs: Input
     drop(fill);
     shapes.push(Shape::Text(title.into(), [10.0, 7.0], accent, true));
     if !s.compact {
-        shapes.push(Shape::Text(format!("{}  |  0.3", PRESETS[s.preset].1.to_uppercase()),
+        shapes.push(Shape::Text(format!("{}  |  {}", PRESETS[s.preset].1.to_uppercase(), VERSION),
             [10.0, 20.0], MUTED, false));
     }
     for (i, row) in rows.iter().enumerate() {
@@ -573,7 +641,7 @@ pub fn trail_lights() -> Vec<LightPoint> { TRAIL.with(|v| v.borrow().lights()) }
 /// This is local input animation and is deliberately not called a hit marker.
 pub fn draw_pulse_ornament(out: &mut Vec<Shape>, x: f32, y: f32, accent: u32, strength: u8) {
     if strength == 0 { return; }
-    let intensity = (strength as f32 / 8.0).clamp(0.0, 1.0);
+    let intensity = fx_envelope((8-strength) as f32 / 8.0,0.36);
     let alpha = ((intensity * 180.0) as u32) << 24;
     let color = alpha | accent;
     for n in 0..3 {
@@ -593,16 +661,36 @@ mod tests {
 
     #[test]
     fn particles_are_bounded_world_local_and_reset_on_teleport() {
-        let mut p = ParticlePath::default();
-        assert!(p.emit("overworld", [1.0, 64.0, 1.0], false, false).is_empty());
-        let a = p.emit("overworld", [1.2, 64.0, 1.1], true, false);
-        assert_eq!(a.len(), 6);
-        assert!(a.iter().all(|q| q.iter().all(|v| v.is_finite())));
-        assert!(p.emit("overworld", [100.0, 64.0, 1.1], true, false).is_empty());
-        assert_eq!(p.emit("nether", [0.0, 50.0, 0.0], true, true).len(), 3);
-        assert!(p.emit("nether", [f64::NAN, 0.0, 0.0], true, false).is_empty());
-        for i in 0..100 {
-            assert!(p.emit("overworld", [i as f64 * 0.2, 64.0, 0.0], true, false).len() <= 8);
+        let mut p=ParticlePath::default();
+        let base=Settings::default();
+        assert!(p.emit("world",[0.0,64.0,0.0],false,base,3).is_empty());
+        for style in 0..BURST_STYLES.len() {
+            let out=p.emit("world",[0.2,64.0,0.0],true,Settings{burst_style:style,..base},3);
+            assert_eq!(out.len(),6);
+            assert!(out.iter().all(|pt|pt.pos.iter().all(|v|v.is_finite())));
+        }
+        for style in 0..TRAIL_STYLES.len(){
+            for k in 0..30 {
+                let out=p.emit("world",[0.3+k as f64*0.1,64.0,0.0],k%2==0,
+                    Settings{trail_style:style,particle_crown:true,..base},2);
+                assert!(out.len()<=6);
+            }
+        }
+        assert!(p.emit("world",[1000.0,64.0,0.0],true,base,3).is_empty());
+        assert_eq!(p.emit("nether",[1.0,60.0,1.0],true,Settings{reduced_motion:true,..base},3).len(),3);
+        assert!(p.emit("nether",[f64::NAN,60.0,1.0],true,base,3).is_empty());
+    }
+    #[test]
+    fn spline_easing_and_quality_regressions() {
+        assert_eq!(catmull_rom(0.0,1.0,2.0,3.0,0.0),1.0);
+        assert_eq!(catmull_rom(0.0,1.0,2.0,3.0,1.0),2.0);
+        assert_eq!(fx_envelope(0.0,0.36),0.0);
+        assert_eq!(fx_envelope(1.0,0.36),0.0);
+        for k in 0..=100{assert!((0.0..=1.0).contains(&fx_envelope(k as f32/100.0,0.36)));}
+        let mut p=ParticlePath::default();
+        for q in 0..=3 {
+            let out=p.emit("world",[0.0,64.0,0.0],true,Settings::default(),q);
+            assert!(out.len()<=[2,4,6,10][q as usize]);
         }
     }
     #[test]
