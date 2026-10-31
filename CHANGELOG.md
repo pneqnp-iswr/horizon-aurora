@@ -1,6 +1,7 @@
 # 0.5.0-rc.1 — 2026-11-01
 
-- Implemented actual world-space native flame/soul-flame particles for movement and input rings. Default ON; bounded per-tick; teleport/dimension resets; Reduced Motion supported; client-only.
+- Implemented actual world-space native flame/soul-flame particles for movement and input rings.
+- Added procedural nighttime meteor streaks to the Aurora Nebula sky (enabled by default, intensity adjustable). Default ON; bounded per-tick; teleport/dimension resets; Reduced Motion supported; client-only.
 - Added `/aurora particles on|off` and `/aurora fire soul|flame`, two settings buttons and pure Rust regression tests.
 - Evaluated MIT-licensed PulseVisual Java visual routines for algorithms; original independent Horizon implementation uses the official native particle hook.
 - No release as stable without CI and real Windows gameplay measurements.

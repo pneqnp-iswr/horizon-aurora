@@ -4,6 +4,7 @@
 override aurora_strength: f32 = 0.78;
 override nebula_strength: f32 = 0.40;
 override starfield_strength: f32 = 0.50;
+override shooting_stars: f32 = 0.90;
 
 fn sky(input: SkyInput) -> vec4<f32> {
     let d = input.direction;
@@ -45,6 +46,26 @@ fn sky(input: SkyInput) -> vec4<f32> {
         let sparkle = 0.72 + 0.28 * sin(frame.time * 0.65 + seed * 21.0);
         rgb += vec3<f32>(0.65, 0.82, 1.0) *
             (star * sky_mask * sparkle * night * max(weather, 0.05) * starfield_strength);
+    }
+    // A single camera-direction-stable comet, with a long thin tail.
+    // Visible only in the night sky; leaves daytime PvP entirely untouched.
+    // The GPU runs no texture reads for this purely procedural streak.
+    if (shooting_stars > 0.0) {
+        let progress = fract(frame.time * 0.028 + 0.37);
+        let head_x = -0.85 + progress * 1.75;
+        let tail_x = d.x - head_x;
+        let trajectory = 0.66 - progress * 0.28 + tail_x * 0.08;
+        let dy = d.y - trajectory;
+        let length_mask = smoothstep(-0.52, -0.03, tail_x) *
+                          (1.0 - smoothstep(-0.014, 0.026, tail_x));
+        let thin = exp(-dy * dy * 1800.0);
+        let core = exp(-(dy * dy * 1700.0 + tail_x * tail_x * 2000.0));
+        let streak = thin * length_mask * 0.75 + core * 1.2;
+        let visibility = night * max(weather, 0.0) *
+                         smoothstep(0.1, 0.3, d.y) *
+                         smoothstep(0.0, 0.3, -d.z);
+        rgb += vec3<f32>(0.40, 0.80, 1.0) *
+               streak * visibility * shooting_stars;
     }
     return vec4<f32>(clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0)), input.color.a);
 }

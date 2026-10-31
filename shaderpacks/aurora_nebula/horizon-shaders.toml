@@ -39,6 +39,16 @@ max = 1.0
 step = 0.05
 
 [[options]]
+id = "shooting_stars"
+name = "Meteor streaks"
+description = "Animated sky-local shooting stars, nighttime only."
+type = "float"
+default = 0.90
+min = 0.0
+max = 1.0
+step = 0.05
+
+[[options]]
 id = "nebula_strength"
 name = "Sky haze"
 type = "float"
