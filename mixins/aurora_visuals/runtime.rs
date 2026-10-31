@@ -1,5 +1,5 @@
-//! Aurora Visuals — dependency-free model, settings, animation and HUD composition.
-//! This file is inserted as a module inside Horizon and independently tested by Cargo.
+// Aurora Visuals — dependency-free model, settings, animation and HUD composition.
+// This file is inserted as a module inside Horizon and independently tested by Cargo.
 use std::cell::{Cell, RefCell};
 
 pub const ID: &str = "aurora_visuals";
