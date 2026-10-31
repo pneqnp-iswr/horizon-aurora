@@ -206,6 +206,7 @@ pub fn settings(get: impl Fn(&str) -> Option<String>) -> Settings {
     })
 }
 pub fn set_settings(s: Settings) { SETTINGS.with(|cell| cell.set(Some(s))); }
+
 /// 20 game ticks are approximately one second in a healthy world. This reports
 /// *estimated* horizontal displacement per 20 ticks, not server-authoritative BPS.
 #[derive(Clone, Debug, Default)]
