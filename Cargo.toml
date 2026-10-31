@@ -1,0 +1,10 @@
+[package]
+name = "aurora-horizon-visuals"
+version = "0.3.0"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "Aurora Visuals: native Horizon PvP and performance HUD, version 0.3.0"
+
+[lib]
+path = "mixins/aurora_visuals/runtime.rs"
