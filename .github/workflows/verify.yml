@@ -93,6 +93,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: v0.4.0-rc.1
         run: |
+          CURRENT_MAIN=$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')
+          if [ "$CURRENT_MAIN" != "$GITHUB_SHA" ]; then
+            echo "A newer main commit exists; skip stale pre-release $GITHUB_SHA"
+            exit 0
+          fi
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Prerelease $TAG already exists; leaving published assets unchanged."
             exit 0
