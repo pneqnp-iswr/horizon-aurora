@@ -1,0 +1,41 @@
+name: Verify Aurora native mod
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  source-and-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+      - name: Offline source and package checks
+        run: |
+          python3 tests/static_validate.py
+          python3 tests/package.py
+          python3 tests/shader_static.py
+          python3 tests/package_shader.py
+      - name: Pure Rust unit tests
+        run: cargo test --manifest-path Cargo.toml
+      - name: Verify Aurora Nebula with official Horizon WGSL checker
+        run: |
+          git clone https://github.com/horizon-rust/horizon.git /tmp/horizon
+          git -C /tmp/horizon checkout 97ded175738a56163e40698be72e968d9b956f73
+          cargo run --locked --manifest-path /tmp/horizon/Cargo.toml -p horizon-shader-api --bin horizon-shader -- check "$GITHUB_WORKSPACE/shaderpacks/aurora_nebula"
+      - name: Checkout upstream mod tools
+        run: git clone --depth 1 https://github.com/horizon-rust/horizon-mods.git /tmp/horizon-mods
+      - name: Stage Aurora for official integration tool
+        run: |
+          mkdir -p /tmp/horizon-mods/native/aurora
+          cp compatibility.json Cargo.toml /tmp/horizon-mods/native/aurora/
+          cp -R mixins /tmp/horizon-mods/native/aurora/
+      - name: Compile entire Horizon game with Aurora hooks
+        working-directory: /tmp/horizon-mods
+        run: python3 native/tools/native.py check aurora
