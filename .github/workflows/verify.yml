@@ -54,13 +54,13 @@ jobs:
       - name: Collect verified source bundles
         run: |
           mkdir -p dist
-          cp /tmp/horizon-mods/native/target/aurora_visuals-0.5.0.hnmod dist/
-          cp shaderpacks/aurora_nebula-0.5.0.hshader dist/
+          cp /tmp/horizon-mods/native/target/aurora_visuals-0.6.0.hnmod dist/
+          cp shaderpacks/aurora_nebula-0.6.0.hshader dist/
           cd dist
           sha256sum *.hnmod *.hshader > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: aurora-v0.5.0-verified-bundles
+          name: aurora-v0.6.0-verified-bundles
           path: dist/*
           if-no-files-found: error
 
@@ -86,12 +86,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: aurora-v0.5.0-verified-bundles
+          name: aurora-v0.6.0-verified-bundles
           path: dist
       - name: Publish only after all official integration checks succeed
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: v0.5.0-rc.1
+          TAG: v0.6.0-rc.1
         run: |
           CURRENT_MAIN=$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')
           if [ "$CURRENT_MAIN" != "$GITHUB_SHA" ]; then
@@ -105,6 +105,6 @@ jobs:
           gh release create "$TAG" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Aurora Visuals v0.5.0 RC1" \
+            --title "Aurora Visuals v0.6.0 RC1" \
             --prerelease \
             --notes "Experimental Horizon native source bundle and WGSL shader pack. Official native integration and shader validation pass in CI; gameplay testing is still required. Do not install untrusted native code."

@@ -11,7 +11,8 @@ fn aurora_command(game: &mut crate::game::Game<'_>, command: &str, ran: &mut boo
     match (first, second) {
         (None, None) | (Some("help"), None) => {
             game.native_chat("/aurora toggle | preset combat|minimal|streamer | theme violet|cyan|amber|rose|mint|electric|scarlet");
-            game.native_chat("/aurora graph|feedback|ambient|compact|motion|trail|flare|adaptive|particles on|off | fire soul|flame | reset");
+            game.native_chat("/aurora graph|feedback|ambient|compact|motion|trail|flare|adaptive|particles|crown on|off");
+            game.native_chat("/aurora fire soul|flame | burst ring|burst|spiral | path off|line|twin|helix | reset");
             return;
         }
         (Some("toggle"), None) => s.shown = !s.shown,
@@ -19,6 +20,14 @@ fn aurora_command(game: &mut crate::game::Game<'_>, command: &str, ran: &mut boo
         (Some("preset"), Some(value)) => {
             if let Some(index) = m::PRESETS.iter().position(|p| p.0 == value) { s.apply_preset(index); }
             else { game.native_chat("Aurora: unknown preset."); return; }
+        }
+        (Some("burst"), Some(value)) => {
+            if let Some(i) = m::BURST_STYLES.iter().position(|v| *v == value) { s.burst_style = i; }
+            else { game.native_chat("Aurora: burst ring|burst|spiral"); return; }
+        }
+        (Some("path"), Some(value)) => {
+            if let Some(i) = m::TRAIL_STYLES.iter().position(|v| *v == value) { s.trail_style = i; }
+            else { game.native_chat("Aurora: path off|line|twin|helix"); return; }
         }
         (Some("fire"), Some(value)) => {
             match value {
@@ -31,7 +40,7 @@ fn aurora_command(game: &mut crate::game::Game<'_>, command: &str, ran: &mut boo
             if let Some(index) = m::THEMES.iter().position(|t| t.0 == value) { s.theme = index; }
             else { game.native_chat("Aurora: unknown theme."); return; }
         }
-        (Some(field @ ("graph" | "feedback" | "ambient" | "compact" | "motion" | "trail" | "flare" | "adaptive" | "particles")), Some(value)) => {
+        (Some(field @ ("graph" | "feedback" | "ambient" | "compact" | "motion" | "trail" | "flare" | "adaptive" | "particles" | "crown")), Some(value)) => {
             let flag = match value { "on" => true, "off" => false, _ => {
                 game.native_chat("Aurora: use on or off."); return;
             } };
@@ -45,6 +54,7 @@ fn aurora_command(game: &mut crate::game::Game<'_>, command: &str, ran: &mut boo
                 "flare" => s.click_flare = flag,
                 "adaptive" => s.adaptive_quality = flag,
                 "particles" => s.particles = flag,
+                "crown" => s.particle_crown = flag,
                 _ => unreachable!(),
             }
         }

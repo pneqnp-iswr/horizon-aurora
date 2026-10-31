@@ -7,10 +7,9 @@ fn aurora_tick(game: &mut crate::game::Game<'_>) {
         let s = m::settings(|key| game.native_setting(m::ID, key));
         let burst = m::take_particle_burst();
         if s.particles {
-            let positions = m::particle_emissions(
-                player.dimension, [player.x, player.y, player.z], burst, s.reduced_motion);
-            for at in positions.into_iter().take(8) {
-                game.native_flame_particle(at, s.soul_particles);
+            for fx in m::particle_emissions(
+                player.dimension, [player.x, player.y, player.z], burst, s) {
+                game.native_flame_particle(fx.pos, fx.soul);
             }
         }
         m::sample_frame(game.native_frame_rate().0);
