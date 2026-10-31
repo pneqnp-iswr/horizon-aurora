@@ -1,7 +1,6 @@
 name: Verify Aurora native mod
 
 on:
-  push:
   pull_request:
   workflow_dispatch:
 
