@@ -2,6 +2,8 @@ name: Verify Aurora native mod
 
 on:
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -18,6 +20,7 @@ jobs:
       - name: Offline source and package checks
         run: |
           python3 tests/static_validate.py
+          python3 -m unittest discover -s tests -p 'test_*.py' -v
           python3 tests/package.py
           python3 tests/shader_static.py
           python3 tests/package_shader.py
@@ -38,3 +41,49 @@ jobs:
       - name: Compile entire Horizon game with Aurora hooks
         working-directory: /tmp/horizon-mods
         run: python3 native/tools/native.py check aurora
+
+      - name: Rebuild .hnmod with official Horizon packaging
+        working-directory: /tmp/horizon-mods
+        run: python3 native/tools/native.py package aurora
+      - name: Pack shader using official Horizon validator
+        run: cargo run --locked --manifest-path /tmp/horizon/Cargo.toml -p horizon-shader-api --bin horizon-shader -- pack "$GITHUB_WORKSPACE/shaderpacks/aurora_nebula"
+      - name: Collect verified source bundles
+        run: |
+          mkdir -p dist
+          cp /tmp/horizon-mods/native/target/aurora_visuals-0.3.0.hnmod dist/
+          cp shaderpacks/aurora_nebula-0.3.0.hshader dist/
+          cd dist
+          sha256sum *.hnmod *.hshader > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aurora-v0.3.0-verified-bundles
+          path: dist/*
+          if-no-files-found: error
+
+  publish-prerelease:
+    name: Publish tested source-bundle prerelease
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: source-and-integration
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: aurora-v0.3.0-verified-bundles
+          path: dist
+      - name: Publish only after all official integration checks succeed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v0.3.0-rc.1
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Prerelease $TAG already exists; leaving published assets unchanged."
+            exit 0
+          fi
+          gh release create "$TAG" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Aurora Visuals v0.3.0 RC1" \
+            --prerelease \
+            --notes "Experimental Horizon native source bundle and WGSL shader pack. Official native integration and shader validation pass in CI; gameplay testing is still required. Do not install untrusted native code."
