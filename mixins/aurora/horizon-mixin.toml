@@ -1,0 +1,66 @@
+[mod]
+id = "aurora"
+version = "0.1.0"
+priority = 100
+
+[compatibility]
+horizon_revision = "ba6344a59cb9e755b730dcf02285fc0d33b97d3c"
+
+[[module]]
+id = "runtime"
+file = "crates/horizon-client/src/game.rs"
+name = "aurora"
+source = "runtime.rs"
+
+[[injection]]
+id = "aurora-hud"
+kind = "HEAD"
+hook = "hud"
+hook_version = 1
+helper = "hud.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "batch", ty = "&mut HudBatch", value = "batch" },
+  { name = "corners", ty = "&mut Corners", value = "corners" }
+]
+
+[[injection]]
+id = "aurora-key"
+kind = "HEAD"
+hook = "key"
+hook_version = 1
+helper = "key.rs"
+bindings = [
+  { name = "key", ty = "&str", value = "key" },
+  { name = "pressed", ty = "bool", value = "pressed" }
+]
+
+[[injection]]
+id = "aurora-mods"
+kind = "HEAD"
+hook = "mods"
+hook_version = 1
+helper = "mods.rs"
+bindings = [{ name = "mods", ty = "&mut Vec<NativeMod>", value = "mods" }]
+
+[[injection]]
+id = "aurora-settings"
+kind = "HEAD"
+hook = "settings"
+hook_version = 1
+helper = "settings.rs"
+bindings = [
+  { name = "mod_id", ty = "&str", value = "mod_id" },
+  { name = "buttons", ty = "&mut Vec<String>", value = "buttons" }
+]
+
+[[injection]]
+id = "aurora-settings-click"
+kind = "HEAD"
+hook = "settings_click"
+hook_version = 1
+helper = "settings_click.rs"
+bindings = [
+  { name = "mod_id", ty = "&str", value = "mod_id" },
+  { name = "button", ty = "usize", value = "button" }
+]
