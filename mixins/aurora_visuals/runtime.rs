@@ -441,3 +441,223 @@ impl QualityGovernor {
         } else { self.low = 0; self.high = 0; }
     }
 }
+pub fn trail_limit(adaptive: bool) -> usize {
+    if adaptive { QUALITY.with(|v| usize::from(v.borrow().level)) }
+    else { 3 }
+}
+
+/// Tiny fixed-size world-space trail. Only local player coordinates enter this
+/// ring buffer. Teleports and dimension switches discard all old points.
+/// Nothing is sent to servers or hidden through blocks: Horizon depth-tests
+/// its own terrain normally and uses these as local lighting requests.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LightPoint { pub pos: [f64; 3], pub age: u8 }
+
+#[derive(Clone, Debug, Default)]
+pub struct LightTrail {
+    dimension: Option<String>,
+    last: Option<[f64; 3]>,
+    points: Vec<LightPoint>,
+    tick: u32,
+}
+impl LightTrail {
+    const MAX_POINTS: usize = 12;
+    pub fn clear(&mut self) { *self = Self::default(); }
+    pub fn sample(&mut self, dimension: &str, pos: [f64; 3]) {
+        if !pos.iter().all(|v| v.is_finite()) { self.clear(); return; }
+        if self.dimension.as_deref() != Some(dimension) {
+            self.clear(); self.dimension = Some(dimension.to_owned());
+        }
+        if let Some(last) = self.last {
+            let dist = (pos[0]-last[0]).hypot(pos[1]-last[1]).hypot(pos[2]-last[2]);
+            if dist > 8.0 { self.clear(); self.dimension = Some(dimension.to_owned()); }
+        }
+        self.last = Some(pos);
+        self.tick = self.tick.wrapping_add(1);
+        for p in &mut self.points { p.age = p.age.saturating_add(1); }
+        self.points.retain(|p| p.age < 25);
+        if self.tick % 3 != 0 { return; }
+        // Limit emitters at a standstill; avoid a pile of lights in one place.
+        let dist = self.points.last().map(|p| {
+            (pos[0]-p.pos[0]).hypot(pos[1]-p.pos[1]).hypot(pos[2]-p.pos[2])
+        }).unwrap_or(1.0);
+        if dist < 0.28 { return; }
+        if self.points.len() == Self::MAX_POINTS { self.points.remove(0); }
+        self.points.push(LightPoint { pos, age: 0 });
+    }
+    pub fn lights(&self) -> Vec<LightPoint> {
+        // Bounded most recent three, omitting any step older than 16 ticks.
+        self.points.iter().rev().filter(|p| p.age <= 16).take(3).copied().collect()
+    }
+}
+pub fn trail_sample(dimension: &str, xyz: [f64; 3]) {
+    TRAIL.with(|v| v.borrow_mut().sample(dimension, xyz));
+}
+pub fn trail_lights() -> Vec<LightPoint> { TRAIL.with(|v| v.borrow().lights()) }
+
+/// Centered screen-space preview ornament, drawn without any shader API.
+/// This is local input animation and is deliberately not called a hit marker.
+pub fn draw_pulse_ornament(out: &mut Vec<Shape>, x: f32, y: f32, accent: u32, strength: u8) {
+    if strength == 0 { return; }
+    let intensity = (strength as f32 / 8.0).clamp(0.0, 1.0);
+    let alpha = ((intensity * 180.0) as u32) << 24;
+    let color = alpha | accent;
+    for n in 0..3 {
+        let r = 4.0 + n as f32 * 4.0 + (8 - strength) as f32 * 0.7;
+        let cx = x - r; let cy = y - r;
+        out.push(Shape::Fill([cx, cy, r * 2.0, 1.0], color));
+        out.push(Shape::Fill([cx, cy + r * 2.0, r * 2.0, 1.0], color));
+        out.push(Shape::Fill([cx, cy, 1.0, r * 2.0], color));
+        out.push(Shape::Fill([cx + r * 2.0, cy, 1.0, r * 2.0], color));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn measure(s: &str) -> f32 { s.len() as f32 * 6.0 }
+
+    #[test]
+    fn defaults_and_old_settings_remain_compatible() {
+        let s = Settings::read(|_| None);
+        assert_eq!(s, Settings::default());
+        let legacy = Settings::read(|k| match k {
+            "theme" => Some("cyan".into()), "preset" => Some("streamer".into()),
+            "corner" => Some("bottom_right".into()),
+            "coords" => Some("true".into()), // v0.1 previously wrote this.
+            _ => None,
+        });
+        assert_eq!((legacy.theme, legacy.preset, legacy.corner), (1, 2, 3));
+        assert!(!legacy.coords); // v0.1 Streamer location is auto-migrated to OFF.
+    }
+    #[test]
+    fn settings_round_trip() {
+        let mut s = Settings::default();
+        for i in 0..s.labels().len() { s.click(i); }
+        let stored = s.stored();
+        let back = Settings::read(|k| stored.iter().find(|(key, _)| *key == k).map(|(_, v)| v.clone()));
+        assert_eq!(s, back);
+    }
+    #[test]
+    fn preset_preserves_visual_preferences() {
+        let mut s = Settings { theme: 4, corner: 3, ambient: true, reduced_motion: true,
+            ..Settings::default() };
+        s.apply_preset(1);
+        assert!(!s.graph && !s.feedback && s.compact);
+        s.apply_preset(2);
+        assert_eq!((s.theme, s.corner, s.ambient, s.reduced_motion), (4, 3, true, true));
+        assert!(!s.coords);
+    }
+    #[test]
+    fn world_transition_and_teleport_do_not_spike_speed() {
+        let mut m = Motion::default();
+        for i in 0..20 { m.sample("overworld", (i as f64 * 0.25, 0.0)); }
+        assert!((m.bps - 4.75).abs() < 1e-7);
+        m.sample("overworld", (2000.0, 0.0));
+        for _ in 0..19 { m.sample("overworld", (2000.0, 0.0)); }
+        assert_eq!(m.bps, 0.0);
+        m.sample("nether", (0.0, 0.0));
+        assert_eq!(m.bps, 0.0);
+        for _ in 0..19 { m.sample("nether", (0.0, 0.0)); }
+        assert_eq!(m.bps, 0.0);
+        m.sample("nether", (f64::INFINITY, 0.0));
+        assert_eq!(m.bps, 0.0);
+    }
+    #[test]
+    fn fps_history_is_bounded_and_ordered_after_wrap() {
+        let mut history = FrameHistory::default();
+        for v in 1..=40 { for _ in 0..5 { history.tick(v); } }
+        assert_eq!(history.values(), (9..=40).collect::<Vec<u32>>());
+    }
+    #[test]
+    fn input_is_feedback_not_forged_hit_data() {
+        let mut pulse = InputPulse::default();
+        pulse.press(true);
+        assert_eq!((pulse.left, pulse.right), (8, 0));
+        for _ in 0..10 { pulse.tick(); }
+        assert_eq!(pulse.left, 0);
+        let result = rows(Settings::default(), Reading { fps: 200, low_fps: 100, ..Reading::default() });
+        assert_eq!(result.len(), 5);
+        assert!(result.iter().all(|r| !r.label.contains("TARGET") && !r.label.contains("HP")));
+    }
+    #[test]
+    fn all_themes_presets_draw_finite_bounded_panels() {
+        for preset in 0..PRESETS.len() {
+            for theme in 0..THEMES.len() {
+                let mut s = Settings { theme, ..Settings::for_preset(preset) };
+                s.coords = true;
+                let p = panel(s, Reading { fps: 280, low_fps: 190, bps: 6.4,
+                    clicks: (12, 7), position: Some((-125000.0, 64.0, 9000.0)),
+                    keys: [true, false, true, false] }, FrameHistory::default(),
+                    InputPulse { left: 7, right: 5 }, &measure);
+                assert!(p.width.is_finite() && p.height.is_finite());
+                assert!(p.width > 130.0 && p.height > 15.0);
+                for shape in &p.shapes {
+                    match shape {
+                        Shape::Fill([x, y, w, h], _) => {
+                            assert!(*x >= 0.0 && *y >= 0.0 && *w >= 0.0 && *h >= 0.0);
+                            assert!(*x + *w <= p.width + 0.01);
+                            assert!(*y + *h <= p.height + 0.01);
+                        }
+                        Shape::Text(_, [x, y], _, _) => {
+                            assert!(*x >= 0.0 && *y >= 0.0 && *y <= p.height);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    #[test]
+    fn ambient_animation_has_known_bounds_and_reduced_motion_is_fixed() {
+        assert_eq!(ambient_intensity(true), 0.30);
+        for _ in 0..1000 {
+            sample_frame(120);
+            let i = ambient_intensity(false);
+            assert!((0.21..=0.41).contains(&i), "intensity: {i}");
+        }
+    }
+
+    #[test]
+    fn trail_is_bounded_and_teleport_safe() {
+        let mut t = LightTrail::default();
+        for i in 0..120 { t.sample("overworld", [i as f64 * 0.12, 65.0, 0.0]); }
+        assert!(t.points.len() <= LightTrail::MAX_POINTS);
+        assert!(t.lights().len() <= 3);
+        assert!(t.lights().iter().all(|p| p.age <= 16));
+        t.sample("overworld", [9999.0, 65.0, 0.0]);
+        assert!(t.points.len() <= 1);
+        t.sample("nether", [0.0, 80.0, 0.0]);
+        assert!(t.points.is_empty());
+        t.sample("nether", [f64::NAN, 80.0, 0.0]);
+        assert!(t.last.is_none());
+    }
+    #[test]
+    fn quality_hysteresis_prevents_frame_to_frame_flicker() {
+        let mut q = QualityGovernor::default();
+        q.observe(54); assert_eq!(q.level, 3);
+        q.observe(54); assert_eq!(q.level, 2);
+        q.observe(70); q.observe(40); assert_eq!(q.level, 2);
+        q.observe(40); assert_eq!(q.level, 1);
+        for _ in 0..5 { q.observe(130); } assert_eq!(q.level, 1);
+        q.observe(130); assert_eq!(q.level, 2);
+        for _ in 0..60 { q.observe(20); } assert_eq!(q.level, 0);
+    }
+    #[test]
+    fn pulse_ornament_is_bounded_and_off_when_idle() {
+        let mut shapes = Vec::new();
+        draw_pulse_ornament(&mut shapes, 30.0, 30.0, 0xA4DBFF, 0);
+        assert!(shapes.is_empty());
+        draw_pulse_ornament(&mut shapes, 30.0, 30.0, 0xA4DBFF, 8);
+        assert_eq!(shapes.len(), 12);
+        assert!(shapes.iter().all(|sh| match sh {
+            Shape::Fill([x, y, w, h], _) => *x >= 0.0 && *y >= 0.0 && *x+*w <= 60.0 && *y+*h <= 60.0,
+            _ => false,
+        }));
+    }
+
+    #[test]
+    fn malformed_settings_use_safe_defaults() {
+        let s = Settings::read(|_| Some("invalid".into()));
+        assert_eq!(s, Settings::default());
+    }
+}
