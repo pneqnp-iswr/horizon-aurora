@@ -91,7 +91,7 @@ jobs:
       - name: Publish only after all official integration checks succeed
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: v0.4.0-rc.1
+          TAG: v0.4.0-rc.2
         run: |
           CURRENT_MAIN=$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')
           if [ "$CURRENT_MAIN" != "$GITHUB_SHA" ]; then
@@ -105,6 +105,6 @@ jobs:
           gh release create "$TAG" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Aurora Visuals v0.4.0 RC1" \
+            --title "Aurora Visuals v0.4.0 RC2" \
             --prerelease \
             --notes "Experimental Horizon native source bundle and WGSL shader pack. Official native integration and shader validation pass in CI; gameplay testing is still required. Do not install untrusted native code."
