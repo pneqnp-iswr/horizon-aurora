@@ -420,6 +420,9 @@ pub fn input_pulse() -> InputPulse { INPUTS.with(Cell::get) }
 pub fn mouse_press(left: bool) {
     INPUTS.with(|v| { let mut pulse = v.get(); pulse.press(left); v.set(pulse); });
     // Consume at most one local click burst each tick to prevent a particle storm.
+    request_particle_burst();
+}
+pub fn request_particle_burst() {
     PARTICLE_BURSTS.with(|v| v.set(v.get().saturating_add(1).min(2)));
 }
 pub fn take_particle_burst() -> bool {

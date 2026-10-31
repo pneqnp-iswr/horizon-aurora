@@ -203,3 +203,7 @@ Ported original Rust implementations of effect patterns, limited geometry and an
 - Adaptive emit cap: at most 10 local particles per tick (lower in low-FPS or reduced-motion mode).
 
 Mouse-input particles **do not indicate confirmed hits**. The high-end 3D Ribbon/China Hat, held item ViewModel, pearl ownership and attack event hooks still require a separate WGPU/API 58 migration. Read the full [PulseVisual port matrix](docs/PULSEVISUAL_PORT.md) and [third-party attribution](THIRD_PARTY_NOTICES.md).
+
+## Isolated VFX test
+
+In a singleplayer world (preferably third-person) run `/aurora particles on` and `/aurora demo` to queue a local particle burst without needing to click an entity. This bypasses mouse mapping for diagnostics only; it does not register or claim any combat hit. Disable ambient and the Aurora Nebula shader to tell real world particles apart from a brightness-only effect. `/aurora burst spiral` then `/aurora demo` switches the burst pattern. The demo command requires an actual in-world client tick to display particles.

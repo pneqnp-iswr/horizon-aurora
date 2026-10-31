@@ -12,7 +12,13 @@ fn aurora_command(game: &mut crate::game::Game<'_>, command: &str, ran: &mut boo
         (None, None) | (Some("help"), None) => {
             game.native_chat("/aurora toggle | preset combat|minimal|streamer | theme violet|cyan|amber|rose|mint|electric|scarlet");
             game.native_chat("/aurora graph|feedback|ambient|compact|motion|trail|flare|adaptive|particles|crown on|off");
-            game.native_chat("/aurora fire soul|flame | burst ring|burst|spiral | path off|line|twin|helix | reset");
+            game.native_chat("/aurora demo | fire soul|flame | burst ring|burst|spiral | path off|line|twin|helix | reset");
+            return;
+        }
+        (Some("demo"), None) => {
+            if !s.particles { game.native_chat("Aurora: enable particles first with /aurora particles on"); return; }
+            m::request_particle_burst();
+            game.native_chat("Aurora: local input-particle demo queued for next game tick. Check in third-person view.");
             return;
         }
         (Some("toggle"), None) => s.shown = !s.shown,
