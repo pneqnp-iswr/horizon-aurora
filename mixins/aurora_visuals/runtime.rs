@@ -366,7 +366,7 @@ pub fn panel(s: Settings, reading: Reading, history: FrameHistory, inputs: Input
     drop(fill);
     shapes.push(Shape::Text(title.into(), [10.0, 7.0], accent, true));
     if !s.compact {
-        shapes.push(Shape::Text(format!("{}  |  0.2", PRESETS[s.preset].1.to_uppercase()),
+        shapes.push(Shape::Text(format!("{}  |  0.3", PRESETS[s.preset].1.to_uppercase()),
             [10.0, 20.0], MUTED, false));
     }
     for (i, row) in rows.iter().enumerate() {
