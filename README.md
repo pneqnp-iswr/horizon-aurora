@@ -1,6 +1,6 @@
-> **What is new in v0.5.0:** Actual client-only 3D flame particles using Horizon's native particle API, not just player glow. Blue soul-flame ring on each local mouse click and a bounded 2-particle footstep trail while moving. No game packets, no hit-detection claims. Enabled by default; use `/aurora particles off` or `/aurora fire flame` to switch colors. Visible in the world, separate from the Aurora Nebula shader pack. Full Linux native compile / in-game performance verification is tracked by GitHub Actions.
+> **What is new in v0.6.0:** Actual client-only 3D flame particles using Horizon's native particle API, not just player glow. Blue soul-flame ring on each local mouse click and a bounded 2-particle footstep trail while moving. No game packets, no hit-detection claims. Enabled by default; use `/aurora particles off` or `/aurora fire flame` to switch colors. Visible in the world, separate from the Aurora Nebula shader pack. Full Linux native compile / in-game performance verification is tracked by GitHub Actions.
 
-# Horizon Aurora — experimental native visuals for Horizon (v0.5.0)
+# Horizon Aurora — experimental native visuals for Horizon (v0.6.0)
 
 The development home is **https://github.com/pneqnp-iswr/horizon-aurora**. Changes should be proposed through pull requests and recorded in the changelog.
 
@@ -186,6 +186,20 @@ powershell -NoProfile -File .\scripts\windows\aurora-native-preflight.ps1
 
 For cleanup and memory/stack-process recovery, see [Windows build recovery](docs/WINDOWS_BUILD_RECOVERY.md). Research notes: [Competitive technical audit](docs/COMPETITIVE_TECHNICAL_AUDIT.md).
 
-## Visible local 3D particles (0.5.0)
+## Visible local 3D particles (0.6.0)
 
 Use `/aurora particles on` to enable. Each click produces 3–6 vanilla flame particles around your feet; walking emits no more than two every four ticks. `/aurora fire soul` (blue) and `/aurora fire flame` (orange) choose a Minecraft-native particle. Both survive without a shaderpack and do not rely on fake screen brightness. The effect is client-local; the actual gameplay status and FPS cost must be checked on Windows. Night-sky visuals are independent: select Aurora Nebula in Horizon's shader pack menu.
+
+## PulseVisual-inspired FX patterns (0.6.0)
+
+Ported original Rust implementations of effect patterns, limited geometry and animation math inspired by the **MIT** Java [PulseVisual](https://github.com/creeleystromberg-sketch/PulseVisual). These use Horizon's actual local native particles; Fabric Java and its JVM classes are not embedded.
+
+- `/aurora burst ring` — angular click-input ring near player feet.
+- `/aurora burst burst` — layered click-input burst with alternating native blue/orange flames.
+- `/aurora burst spiral` — upward spiral input burst.
+- `/aurora path off|line|twin|helix` — smoothed particle trails while moving.
+- `/aurora crown on|off` — optional sparse particle halo near player head (not a solid 3D China Hat mesh).
+- `/aurora particles on|off` — instantly disables/enables the entire particle system.
+- Adaptive emit cap: at most 10 local particles per tick (lower in low-FPS or reduced-motion mode).
+
+Mouse-input particles **do not indicate confirmed hits**. The high-end 3D Ribbon/China Hat, held item ViewModel, pearl ownership and attack event hooks still require a separate WGPU/API 58 migration. Read the full [PulseVisual port matrix](docs/PULSEVISUAL_PORT.md) and [third-party attribution](THIRD_PARTY_NOTICES.md).

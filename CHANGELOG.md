@@ -1,3 +1,13 @@
+# 0.6.0-rc.1 — PulseVisual-inspired original Rust cosmetics
+
+- Three input bursts: ring, layered burst, rising spiral.
+- Four movement patterns: off, spline-smoothed line, twin rails, dual helix.
+- Optional head-height particle crown (not yet a 3D China Hat mesh).
+- Smoothstep finite input ornament, blue/orange mixed native flame sprites.
+- Adaptive 2–10 particles/tick budget; safe world/teleport reset, reduced-motion support.
+- MIT PulseVisual research/feature parity matrix and explicit notices.
+- Original source compiled only after official Horizon native integration CI; Windows runtime visuals and FPS remain unmeasured.
+
 # 0.5.0-rc.1 — 2026-11-01
 
 - Implemented actual world-space native flame/soul-flame particles for movement and input rings.
