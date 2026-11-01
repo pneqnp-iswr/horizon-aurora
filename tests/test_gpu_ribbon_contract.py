@@ -63,7 +63,7 @@ class NativeGpuRibbonContract(unittest.TestCase):
         self.assertNotIn("let mut previous_side:Option<Vec3>", gpu)
         # The scene/paused render path must not reset the epoch on a timeout.
         self.assertNotRegex(
-            gpu, r"snapshot\\.updated\\)\\s*>\\s*Duration::from_secs\\(2\\)\\s*\\{\\s*self\\.reset_path"
+            gpu, r"snapshot\.updated\)\s*>\s*Duration::from_secs\(2\)\s*\{\s*self\.reset_path"
         )
 
     def test_integrated_server_tick_cannot_reset_client_ribbon(self):
@@ -73,7 +73,7 @@ class NativeGpuRibbonContract(unittest.TestCase):
         self.assertIn("if !game.native_on(m::ID) {", tick)
         self.assertNotIn("!game.native_window() ||", tick)
         # The server-role early return must precede ANY shared GPU state mutation.
-        server_guard = tick.split("if !game.native_window() {", 1)[1].split("}", 1)[0]
+        server_guard = tick.split("if !game.native_window() {", 1)[1].split("if !game.native_on(m::ID) {", 1)[0]
         self.assertIn("return;", server_guard)
         self.assertNotIn("aurora_gpu::inactive()", server_guard)
         self.assertIn("role=integrated_server", tick)
