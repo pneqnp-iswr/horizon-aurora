@@ -1,3 +1,11 @@
+# Unreleased — ribbon geometry and lifecycle integration candidate (PR #5)
+
+- WGPU Ribbon: shared endpoint frames across adjacent triangles, camera-facing sides with fallback, centripetal spline, adaptive 4–7 subdivisions per movement sample, clamped local overshoot.
+- Individual point-age fades with smooth entrance/exit and WGSL lateral alpha edges. Demo geometry retains a continuous time origin while client snapshots are temporarily stale.
+- Optional `AURORA_RIBBON_DIAG=1` life-cycle logs (client/server role, player available, publish sequence, animation epoch, dimension and GPU reset reasons). Diagnostics are off by default and transition-only.
+- Added native unit and offline Python regressions; see `docs/RIBBON_WINDOWS_ACCEPTANCE.md` for Windows singleplayer/multiplayer validation.
+- Status: candidate only; Linux native integration CI and real gameplay/benchmark evidence are required before promotion. No FPS claim.
+
 # 0.7.1-rc.1 — singleplayer ribbon stability hotfix
 
 - Fixed integrated-server native_tick clearing the process-shared GPU ribbon snapshot in singleplayer. Non-window/server game ticks now return without mutating client-owned GPU state.

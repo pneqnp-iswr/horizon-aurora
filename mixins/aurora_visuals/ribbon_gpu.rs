@@ -21,12 +21,14 @@ struct Params {
 struct VertexOut {
     @builtin(position) position: vec4<f32>,
     @location(0) tint: vec4<f32>,
+    @location(1) edge: f32,
 };
 @vertex
-fn vs(@location(0) position: vec3<f32>, @location(1) tint: vec4<f32>) -> VertexOut {
+fn vs(@location(0) position: vec3<f32>, @location(1) tint: vec4<f32>, @location(2) edge: f32) -> VertexOut {
     var output: VertexOut;
     output.position = params.mvp * vec4<f32>(position, 1.0);
     output.tint = tint;
+    output.edge = edge;
     return output;
 }
 @fragment
@@ -39,7 +41,8 @@ fn fs(input: VertexOut) -> @location(0) vec4<f32> {
     let world_z = textureLoad(scene_depth, texel, 0);
     let separation = input.position.z - world_z;
     let soft = clamp((separation + 0.0015) * 180.0, 0.0, 1.0);
-    return vec4<f32>(input.tint.rgb, input.tint.a * soft);
+    let edge_alpha = 1.0 - smoothstep(0.72, 1.0, abs(input.edge));
+    return vec4<f32>(input.tint.rgb, input.tint.a * soft * edge_alpha);
 }
 "#;
 
@@ -70,6 +73,8 @@ fn dimension_hash(id: &str) -> u64 {
 }
 pub fn publish(dimension: &str, pos: Option<[f64; 3]>, enabled: bool, style: usize, demo: bool) {
     let mut state = lock_bridge();
+    let previous_player = state.snapshot.position.is_some();
+    let previous_enabled = state.snapshot.enabled;
     state.snapshot.position = pos.filter(|p| p.iter().all(|v| v.is_finite()));
     state.snapshot.dimension = dimension_hash(dimension);
     state.snapshot.style = style.min(2) as u8;
@@ -77,6 +82,12 @@ pub fn publish(dimension: &str, pos: Option<[f64; 3]>, enabled: bool, style: usi
     state.snapshot.demo = demo;
     state.snapshot.sequence = state.snapshot.sequence.wrapping_add(1);
     state.snapshot.updated = Instant::now();
+    if diagnostics_enabled() && (previous_player != state.snapshot.position.is_some()
+        || previous_enabled != state.snapshot.enabled) {
+        eprintln!("[aurora/ribbon] role=client player_available={} enabled={} sequence={} dimension_hash={:x}",
+            state.snapshot.position.is_some(), state.snapshot.enabled,
+            state.snapshot.sequence, state.snapshot.dimension);
+    }
 }
 pub fn inactive() { publish("", None, false, 0, false); }
 pub fn needs(needs: &mut RenderNeeds) {
@@ -87,7 +98,7 @@ pub fn needs(needs: &mut RenderNeeds) {
         // resources promptly when disabled or when a world closes.
         RENDERER.with(|cell| {
             let mut renderer = cell.borrow_mut();
-            renderer.reset_path();
+            renderer.reset_path("disabled_or_world_closed");
             renderer.gpu = None;
         });
     }
@@ -110,17 +121,15 @@ struct Renderer {
     dimension: u64,
     points: VecDeque<Point>,
     staging: Vec<[f32; 8]>,
-    samples: Vec<(Vec3,f32)>,
+    samples: Vec<(Vec3,f32,f32)>,
+    strand_points: Vec<Vec3>,
+    sides: Vec<Vec3>,
     demo_epoch: Option<Instant>,
+    animation_epoch: u64,
     gpu: Option<Gpu>,
 }
 thread_local! { static RENDERER: RefCell<Renderer> = RefCell::new(Renderer::default()); }
 
-fn spline(a: f64, b: f64, c: f64, d: f64, t: f64) -> f64 {
-    let t2 = t*t;
-    0.5 * (2.0*b + (c-a)*t + (2.0*a-5.0*b+4.0*c-d)*t2
-        + (-a+3.0*b-3.0*c+d)*t2*t)
-}
 fn hue_rgb(h: f32) -> [f32; 3] {
     let h = h.rem_euclid(1.0) * 6.0;
     let x = 1.0 - ((h % 2.0) - 1.0).abs();
@@ -144,113 +153,171 @@ fn relative(p: [f64;3], camera:DVec3) -> Vec3 {
     // Subtract in f64 before narrowing: avoids far-from-origin wobble.
     Vec3::new((p[0]-camera.x) as f32,(p[1]-camera.y) as f32,(p[2]-camera.z) as f32)
 }
-fn ribbon_triangles(out: &mut Vec<[f32;8]>, a:Vec3, b:Vec3, side:Vec3,
-                    ca:[f32;4], cb:[f32;4], width_a:f32, width_b:f32) {
-    if out.len()+6 > VERTEX_LIMIT {return;}
-    let aa=a+side*width_a*0.5;
-    let ab=a-side*width_a*0.5;
-    let ba=b+side*width_b*0.5;
-    let bb=b-side*width_b*0.5;
-    let v=|p:Vec3,c:[f32;4]| [p.x,p.y,p.z,c[0],c[1],c[2],c[3],0.0];
-    out.extend_from_slice(&[v(aa,ca),v(ab,ca),v(ba,cb),v(ba,cb),v(ab,ca),v(bb,cb)]);
+
+fn smooth01(t:f32)->f32 {let t=t.clamp(0.0,1.0);t*t*(3.0-2.0*t)}
+fn point_opacity(stamp:Instant,now:Instant)->f32 {
+    let age=now.saturating_duration_since(stamp).as_secs_f32();
+    let remaining=(1.0-age/LIFETIME.as_secs_f32()).clamp(0.0,1.0);
+    smooth01(age/0.10)*smooth01(remaining/0.28)
+}
+fn centripetal(p0:[f64;3],p1:[f64;3],p2:[f64;3],p3:[f64;3],t:f64)->[f64;3] {
+    let dist=|a:[f64;3],b:[f64;3]|(0..3).map(|i|(a[i]-b[i]).powi(2)).sum::<f64>().sqrt();
+    let d0=dist(p0,p1).max(1e-8).sqrt();
+    let d1=dist(p1,p2).max(1e-8).sqrt();
+    let d2=dist(p2,p3).max(1e-8).sqrt();
+    let t2=t*t;let t3=t2*t;
+    [0,1,2].map(|i|{
+        let m1=d1*((p1[i]-p0[i])/d0-(p2[i]-p0[i])/(d0+d1)+(p2[i]-p1[i])/d1);
+        let m2=d1*((p2[i]-p1[i])/d1-(p3[i]-p1[i])/(d1+d2)+(p3[i]-p2[i])/d2);
+        ((2.0*t3-3.0*t2+1.0)*p1[i]+(t3-2.0*t2+t)*m1+
+          (-2.0*t3+3.0*t2)*p2[i]+(t3-t2)*m2).clamp(p1[i].min(p2[i]),p1[i].max(p2[i]))
+    })
+}
+fn stable_side(tangent:Vec3,at:Vec3,previous:Option<Vec3>)->Vec3 {
+    let mut side=tangent.cross((-at).normalize_or_zero()).normalize_or_zero();
+    if side.length_squared()<1e-6 {
+        if let Some(prev)=previous {side=(prev-tangent*prev.dot(tangent)).normalize_or_zero();}
+    }
+    if side.length_squared()<1e-6 {
+        for axis in [Vec3::Y,Vec3::X,Vec3::Z] {
+            side=tangent.cross(axis).normalize_or_zero();
+            if side.length_squared()>=1e-6 {break;}
+        }
+    }
+    if let Some(prev)=previous {if side.dot(prev)<0.0 {side=-side;}}
+    side
+}
+fn diagnostics_enabled()->bool {
+    static ON:OnceLock<bool>=OnceLock::new();
+    *ON.get_or_init(||std::env::var("AURORA_RIBBON_DIAG").as_deref()==Ok("1"))
+}
+fn ribbon_triangles(out:&mut Vec<[f32;8]>,a:Vec3,b:Vec3,sa:Vec3,sb:Vec3,
+                    ca:[f32;4],cb:[f32;4],wa:f32,wb:f32) {
+    if out.len()+6>VERTEX_LIMIT{return;}
+    let aa=a+sa*wa*0.5;let ab=a-sa*wa*0.5;
+    let ba=b+sb*wb*0.5;let bb=b-sb*wb*0.5;
+    let v=|p:Vec3,c:[f32;4],e:f32|[p.x,p.y,p.z,c[0],c[1],c[2],c[3],e];
+    out.extend_from_slice(&[v(aa,ca,1.0),v(ab,ca,-1.0),v(ba,cb,1.0),
+                            v(ba,cb,1.0),v(ab,ca,-1.0),v(bb,cb,-1.0)]);
 }
 impl Renderer {
-    fn reset_path(&mut self) { self.points.clear(); self.previous_sequence=0; self.demo_epoch=None; }
-
-    fn accept(&mut self, snapshot: Snapshot, now: Instant) {
-        if self.dimension!=snapshot.dimension {self.reset_path();self.dimension=snapshot.dimension;}
+    fn reset_path(&mut self,reason:&'static str) {
+        if !self.points.is_empty()||self.demo_epoch.is_some(){
+            self.animation_epoch=self.animation_epoch.wrapping_add(1);
+            if diagnostics_enabled(){
+                eprintln!("[aurora/ribbon] role=client reason={reason} epoch={} sequence={} points={}",
+                    self.animation_epoch,self.previous_sequence,self.points.len());
+            }
+        }
+        self.points.clear();self.previous_sequence=0;self.demo_epoch=None;
+    }
+    fn accept(&mut self,snapshot:Snapshot,now:Instant){
+        if self.dimension!=snapshot.dimension {
+            self.reset_path("dimension_transition");self.dimension=snapshot.dimension;
+        }
         if self.previous_sequence!=snapshot.sequence {
             self.previous_sequence=snapshot.sequence;
             if let Some(pos)=snapshot.position {
                 let mut add=true;
                 if let Some(last)=self.points.back() {
-                    let d = (pos[0]-last.at[0]).hypot(pos[1]-last.at[1]).hypot(pos[2]-last.at[2]);
-                    if d > 8.0 {self.reset_path();}
-                    else if d < 0.035 {add=false;}
+                    let d=(pos[0]-last.at[0]).hypot(pos[1]-last.at[1]).hypot(pos[2]-last.at[2]);
+                    if d>8.0 {self.reset_path("teleport");}
+                    else if d<0.035 {add=false;}
                 }
                 if add {
                     if self.points.len()>=POINT_LIMIT {self.points.pop_front();}
-                    self.points.push_back(Point {at:pos,stamp:now});
+                    self.points.push_back(Point{at:pos,stamp:now});
                 }
             }
         }
-        while self.points.front().is_some_and(|p| now.duration_since(p.stamp)>LIFETIME) {
+        while self.points.front().is_some_and(|p|now.saturating_duration_since(p.stamp)>LIFETIME) {
             self.points.pop_front();
         }
     }
-
-    fn build(&mut self, camera:DVec3, snapshot:Snapshot, now:Instant) {
+    fn build(&mut self,camera:DVec3,snapshot:Snapshot,now:Instant){
         self.staging.clear();
-        if self.points.len()<2 && !snapshot.demo {return;}
+        if self.points.len()<2&&!snapshot.demo{return;}
         self.samples.clear();
         if snapshot.demo {
             let center=match snapshot.position {Some(p)=>p,None=>return};
             let center=relative(center,camera);
             let start=*self.demo_epoch.get_or_insert(now);
-            let clock=now.duration_since(start).as_secs_f32();
-            for i in 0..32 {
-                let t=i as f32/31.0;
+            let clock=now.saturating_duration_since(start).as_secs_f32();
+            for i in 0..64 {
+                let t=i as f32/63.0;
                 let a=t*std::f32::consts::TAU*1.35+clock*0.6;
                 let radius=0.65+0.38*t;
-                let p=center+Vec3::new(a.cos()*radius,0.25+1.35*t,a.sin()*radius);
-                self.samples.push((p,t));
+                self.samples.push((center+Vec3::new(a.cos()*radius,0.25+1.35*t,a.sin()*radius),t,1.0));
             }
         } else {
-            let length=self.points.len();
-            for k in 0..length-1 {
+            let n=self.points.len();
+            for k in 0..n-1 {
                 let p0=self.points[k.saturating_sub(1)].at;
                 let p1=self.points[k].at;
                 let p2=self.points[k+1].at;
-                let p3=self.points[(k+2).min(length-1)].at;
-                for sub in 0..4 {
-                    let t=sub as f64/4.0;
-                    let xyz=[0,1,2].map(|n| spline(p0[n],p1[n],p2[n],p3[n],t));
-                    self.samples.push((relative(xyz,camera), (k as f32+sub as f32/4.0)/(length-1) as f32));
+                let p3=self.points[(k+2).min(n-1)].at;
+                let distance=(p2[0]-p1[0]).hypot(p2[1]-p1[1]).hypot(p2[2]-p1[2]);
+                let steps=((distance/0.20).ceil() as usize).clamp(4,7);
+                let a0=point_opacity(self.points[k].stamp,now);
+                let a1=point_opacity(self.points[k+1].stamp,now);
+                for sub in 0..steps {
+                    let t=sub as f64/steps as f64;
+                    let p=relative(centripetal(p0,p1,p2,p3,t),camera);
+                    let fraction=(k as f32+t as f32)/(n-1) as f32;
+                    if self.samples.last().is_none_or(|(last,_,_)|last.distance_squared(p)>1e-8){
+                        self.samples.push((p,fraction,a0+(a1-a0)*t as f32));
+                    }
                 }
             }
-            self.samples.push((relative(self.points[length-1].at,camera),1.0));
+            let last=&self.points[n-1];
+            let p=relative(last.at,camera);
+            if self.samples.last().is_none_or(|(v,_,_)|v.distance_squared(p)>1e-8) {
+                self.samples.push((p,1.0,point_opacity(last.stamp,now)));
+            }
         }
-        let count=if snapshot.style==2 {2}else{1};
-        let origin=Vec3::ZERO;
-        for strand in 0..count {
-            let mut previous_side:Option<Vec3>=None;
-            for i in 1..self.samples.len(){
-                let (mut a,t0)=self.samples[i-1];let (mut b,t1)=self.samples[i];
-                if snapshot.style==2 {
-                    let wave0=(t0*std::f32::consts::TAU*3.0+strand as f32*std::f32::consts::PI).sin();
-                    let wave1=(t1*std::f32::consts::TAU*3.0+strand as f32*std::f32::consts::PI).sin();
-                    a += Vec3::new(wave0*0.18,wave0*0.24,-wave0*0.18);
-                    b += Vec3::new(wave1*0.18,wave1*0.24,-wave1*0.18);
-                }
-                let tangent=(b-a).normalize_or_zero();
-                if tangent.length_squared()<1e-8 {continue;}
-                let toward=(origin-(a+b)*0.5).normalize_or_zero();
-                let mut side=tangent.cross(toward).normalize_or_zero();
-                if side.length_squared()<1e-6 {side=tangent.cross(Vec3::Y).normalize_or_zero();}
-                if side.length_squared()<1e-6 {continue;}
-                if let Some(prev)=previous_side {if side.dot(prev)<0.0 {side=-side;}}
-                previous_side=Some(side);
-                let width=match snapshot.style {0=>0.24,1=>0.36,_=>0.19};
-                let taper=|t:f32| (t*5.0).min(1.0) * ((1.0-t)*4.0).min(1.0);
-                let timefade=if snapshot.demo {1.0} else {
-                    self.points.back().map(|p| (1.0-now.duration_since(p.stamp).as_secs_f32()/LIFETIME.as_secs_f32()).clamp(0.0,1.0)).unwrap_or(0.0)
-                };
-                let agefade=|t:f32| (0.18+0.82*t).min(1.0)*timefade;
+        if self.samples.len()<2{return;}
+        let strands=if snapshot.style==2 {2}else{1};
+        for strand in 0..strands {
+            self.strand_points.clear();self.sides.clear();
+            for &(p,t,_) in &self.samples {
+                let p=if snapshot.style==2 {
+                    let phase=t*std::f32::consts::TAU*3.0+strand as f32*std::f32::consts::PI;
+                    let wave=phase.sin();
+                    p+Vec3::new(wave*0.18,wave*0.24,-wave*0.18)
+                }else{p};
+                self.strand_points.push(p);
+            }
+            let n=self.strand_points.len();
+            for i in 0..n {
+                let p0=self.strand_points[i.saturating_sub(1)];
+                let p2=self.strand_points[(i+1).min(n-1)];
+                let tangent=(p2-p0).normalize_or_zero();
+                let prev=self.sides.last().copied();
+                let side=if tangent.length_squared()<1e-8 {
+                    prev.unwrap_or(Vec3::X)
+                }else{stable_side(tangent,self.strand_points[i],prev)};
+                self.sides.push(side);
+            }
+            let width:f32=match snapshot.style{0=>0.24,1=>0.36,_=>0.19};
+            let taper=|t:f32|smooth01(t/0.06)*smooth01((1.0-t)/0.06);
+            for i in 1..n {
+                let (_,t0,a0)=self.samples[i-1];
+                let (_,t1,a1)=self.samples[i];
                 let mut ca=color(snapshot.style,t0,strand);
                 let mut cb=color(snapshot.style,t1,strand);
-                ca[3]*=agefade(t0);cb[3]*=agefade(t1);
-                // World values are converted to camera-relative f32 for precision.
-                ribbon_triangles(&mut self.staging,a,b,side,ca,cb,
-                                width*taper(t0),width*taper(t1));
+                ca[3]*=a0;cb[3]*=a1;
+                ribbon_triangles(&mut self.staging,self.strand_points[i-1],self.strand_points[i],
+                                 self.sides[i-1],self.sides[i],ca,cb,
+                                 width*taper(t0),width*taper(t1));
             }
         }
     }
-
     fn ensure_gpu(&mut self, world:&WorldDrawn<'_>) {
         let identity=world.device as *const wgpu::Device as usize;
         let replace=self.gpu.as_ref().is_none_or(|g|g.device_address!=identity||g.format!=world.color_format);
         if !replace {return;}
         self.gpu=None;
+        if diagnostics_enabled() {eprintln!("[aurora/ribbon] role=client reason=gpu_resources_recreated epoch={} sequence={}",self.animation_epoch,self.previous_sequence);}
         let device=world.device;
         let shader=device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label:Some("Aurora Ribbon WGSL"),
@@ -278,6 +345,7 @@ impl Renderer {
                     attributes:&[
                         wgpu::VertexAttribute {format:wgpu::VertexFormat::Float32x3,offset:0,shader_location:0},
                         wgpu::VertexAttribute {format:wgpu::VertexFormat::Float32x4,offset:12,shader_location:1},
+                        wgpu::VertexAttribute {format:wgpu::VertexFormat::Float32,offset:28,shader_location:2},
                     ],
                 })],compilation_options:Default::default(),
             },
@@ -303,9 +371,12 @@ impl Renderer {
     }
     fn draw(&mut self,world:&mut WorldDrawn<'_>,snapshot:Snapshot) {
         let now=Instant::now();
-        if !snapshot.enabled || now.duration_since(snapshot.updated)>Duration::from_secs(2) {
-            self.reset_path(); self.gpu=None;return;
+        if !snapshot.enabled {
+            self.reset_path("disabled");self.gpu=None;return;
         }
+        // A paused/menu frame may have a stale client tick. Preserve epoch,
+        // while explicit client inactive() still tears down world state.
+        if now.saturating_duration_since(snapshot.updated)>Duration::from_secs(2) {return;}
         self.accept(snapshot,now);
         self.build(world.camera,snapshot,now);
         if world.size[0]==0 || world.size[1]==0 {return;}
@@ -361,14 +432,65 @@ mod tests {
             .validate(&module).expect("Aurora WGPU shader must validate");
     }
     #[test]
-    fn cubic_endpoint_invariants() {
-        assert_eq!(spline(0.,1.,2.,3.,0.),1.);
-        assert_eq!(spline(0.,1.,2.,3.,1.),2.);
+    fn centripetal_endpoint_invariants() {
+        let p0 = [0.0, -1.0, 0.5];
+        let p1 = [1.0, 2.0, 3.0];
+        let p2 = [2.0, 4.0, 6.0];
+        let p3 = [4.0, 5.0, 7.0];
+        assert_eq!(centripetal(p0, p1, p2, p3, 0.0), p1);
+        assert_eq!(centripetal(p0, p1, p2, p3, 1.0), p2);
+    }
+    #[test]
+    fn continuous_strip_has_identical_shared_join_vertices(){
+        let mut v=Vec::new();let c=[1.0;4];
+        let a=Vec3::ZERO;let b=Vec3::new(1.0,0.3,0.0);let d=Vec3::new(2.0,0.2,0.7);
+        let s0=Vec3::Y;let s1=Vec3::Z;let s2=Vec3::X;
+        ribbon_triangles(&mut v,a,b,s0,s1,c,c,0.2,0.4);
+        ribbon_triangles(&mut v,b,d,s1,s2,c,c,0.4,0.2);
+        assert_eq!(&v[2][..3],&v[6][..3]);
+        assert_eq!(&v[5][..3],&v[7][..3]);
+    }
+    #[test]
+    fn demo_animation_epoch_survives_sequential_client_snapshots() {
+        let t=Instant::now();
+        let mut renderer=Renderer::default();
+        let mut snapshot=Snapshot {
+            position:Some([0.0,0.0,0.0]), dimension:42, style:0,
+            enabled:true,demo:true,sequence:1,updated:t,
+        };
+        renderer.accept(snapshot,t);
+        renderer.build(DVec3::new(0.0,0.0,4.0),snapshot,t);
+        assert!(!renderer.staging.is_empty());
+        let origin=renderer.demo_epoch;
+        let later=t+Duration::from_millis(250);
+        snapshot.sequence+=1;
+        snapshot.updated=later;
+        renderer.accept(snapshot,later);
+        renderer.build(DVec3::new(0.0,0.0,4.0),snapshot,later);
+        assert_eq!(renderer.demo_epoch,origin);
+        assert_eq!(renderer.animation_epoch,0);
+        assert!(!renderer.staging.is_empty());
+    }
+    #[test]
+    fn per_point_age_fade_is_bounded(){
+        let now=Instant::now();
+        assert_eq!(point_opacity(now,now),0.0);
+        assert!(point_opacity(now-Duration::from_millis(300),now)>0.9);
+        assert_eq!(point_opacity(now-LIFETIME,now),0.0);
+    }
+    #[test]
+    fn centripetal_segment_is_bounded(){
+        let a=[-5.0,0.0,1.0];let b=[0.0,0.0,0.0];
+        let c=[0.5,2.0,0.0];let d=[1.0,-6.0,1.0];
+        for i in 0..=100 {
+            let p=centripetal(a,b,c,d,i as f64/100.0);
+            for j in 0..3 {assert!(p[j]>=b[j].min(c[j])-1e-12&&p[j]<=b[j].max(c[j])+1e-12);}
+        }
     }
     #[test]
     fn ribbon_vertex_cap_and_gradient() {
         let mut vertices=Vec::new();
-        for _ in 0..2000 {ribbon_triangles(&mut vertices,Vec3::ZERO,Vec3::X,Vec3::Z,
+        for _ in 0..2000 {ribbon_triangles(&mut vertices,Vec3::ZERO,Vec3::X,Vec3::Z,Vec3::Z,
             color(1,0.,0),color(1,1.,0),0.2,0.1);}
         assert!(vertices.len()<=VERTEX_LIMIT);
         assert!(vertices.iter().all(|v|v.iter().all(|x|x.is_finite())));
