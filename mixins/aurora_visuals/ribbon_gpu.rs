@@ -326,7 +326,7 @@ impl Renderer {
             label:Some("Aurora Ribbon composite"),color_attachments:&[Some(wgpu::RenderPassColorAttachment {
                 view:world.color_view,resolve_target:None,depth_slice:None,
                 ops:wgpu::Operations {load:wgpu::LoadOp::Load,store:wgpu::StoreOp::Store},
-            })],depth_stencil_attachment:None,..Default::default(),
+            })],depth_stencil_attachment:None,..Default::default()
         });
         pass.set_pipeline(&gpu.pipeline);
         pass.set_bind_group(0,&bind,&[]);
