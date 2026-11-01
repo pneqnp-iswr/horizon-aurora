@@ -5,9 +5,9 @@ This is an **unreleased integration candidate**. The pinned native-mod API is Ho
 ## Windows build
 
 ```powershell
-git clone --branch fix/ribbon-continuous-geometry-fade https://github.com/pneqnp-iswr/horizon-aurora.git C:\\Aurora\\horizon-aurora-ribbon-test
+git clone --branch fix/ribbon-continuous-geometry-fade https://github.com/pneqnp-iswr/horizon-aurora.git C:\Aurora\horizon-aurora-ribbon-test
 $env:AURORA_RIBBON_DIAG = "1"
-.\\horizon-launcher.exe native-build "C:\\Aurora\\horizon-aurora-ribbon-test\\mixins\\aurora_visuals" --trust-native-code
+.\horizon-launcher.exe native-build "C:\Aurora\horizon-aurora-ribbon-test\mixins\aurora_visuals" --trust-native-code
 ```
 
 Run the newly built **Native mods** instance. The `native-build` command takes a trusted local native source directory. Remove `AURORA_RIBBON_DIAG` or set it to `0` for normal play. Note the Horizon build log and installed game version.
