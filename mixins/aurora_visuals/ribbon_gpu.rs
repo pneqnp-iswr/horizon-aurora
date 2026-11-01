@@ -257,19 +257,19 @@ impl Renderer {
             ],
         });
         let pipeline_layout=device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label:Some("Aurora Ribbon pipeline layout"),bind_group_layouts:&[&layout],push_constant_ranges:&[],
+            label:Some("Aurora Ribbon pipeline layout"),bind_group_layouts:&[Some(&layout)],immediate_size:0,
         });
         let pipeline=device.create_render_pipeline(&wgpu::RenderPipelineDescriptor{
             label:Some("Aurora depth-aware 3D ribbons"),layout:Some(&pipeline_layout),
             vertex:wgpu::VertexState {
                 module:&shader,entry_point:Some("vs"),
-                buffers:&[wgpu::VertexBufferLayout{
+                buffers:&[Some(wgpu::VertexBufferLayout{
                     array_stride:32,step_mode:wgpu::VertexStepMode::Vertex,
                     attributes:&[
                         wgpu::VertexAttribute {format:wgpu::VertexFormat::Float32x3,offset:0,shader_location:0},
                         wgpu::VertexAttribute {format:wgpu::VertexFormat::Float32x4,offset:12,shader_location:1},
                     ],
-                }],compilation_options:Default::default(),
+                })],compilation_options:Default::default(),
             },
             fragment:Some(wgpu::FragmentState {
                 module:&shader,entry_point:Some("fs"),
@@ -278,7 +278,7 @@ impl Renderer {
                 compilation_options:Default::default(),
             }),
             primitive:wgpu::PrimitiveState{topology:wgpu::PrimitiveTopology::TriangleList,cull_mode:None,..Default::default()},
-            depth_stencil:None,multisample:Default::default(),multiview:None,cache:None,
+            depth_stencil:None,multisample:Default::default(),multiview_mask:None,cache:None,
         });
         let uniform=device.create_buffer(&wgpu::BufferDescriptor {
             label:Some("Aurora Ribbon camera uniforms"),size:80,
