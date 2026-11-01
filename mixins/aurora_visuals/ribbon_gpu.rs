@@ -73,6 +73,8 @@ fn dimension_hash(id: &str) -> u64 {
 }
 pub fn publish(dimension: &str, pos: Option<[f64; 3]>, enabled: bool, style: usize, demo: bool) {
     let mut state = lock_bridge();
+    let previous_player = state.snapshot.position.is_some();
+    let previous_enabled = state.snapshot.enabled;
     state.snapshot.position = pos.filter(|p| p.iter().all(|v| v.is_finite()));
     state.snapshot.dimension = dimension_hash(dimension);
     state.snapshot.style = style.min(2) as u8;
@@ -80,6 +82,12 @@ pub fn publish(dimension: &str, pos: Option<[f64; 3]>, enabled: bool, style: usi
     state.snapshot.demo = demo;
     state.snapshot.sequence = state.snapshot.sequence.wrapping_add(1);
     state.snapshot.updated = Instant::now();
+    if diagnostics_enabled() && (previous_player != state.snapshot.position.is_some()
+        || previous_enabled != state.snapshot.enabled) {
+        eprintln!("[aurora/ribbon] role=client player_available={} enabled={} sequence={} dimension_hash={:x}",
+            state.snapshot.position.is_some(), state.snapshot.enabled,
+            state.snapshot.sequence, state.snapshot.dimension);
+    }
 }
 pub fn inactive() { publish("", None, false, 0, false); }
 pub fn needs(needs: &mut RenderNeeds) {
