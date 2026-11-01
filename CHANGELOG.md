@@ -1,3 +1,14 @@
+# 0.7.0-rc.1 — experimental true WGPU Ribbon Renderer
+
+- Added real geometry renderer to Horizon's API 58 `native_world_drawn` and `native_render_needs` hooks.
+- Added three actual triangle-mesh styles: Silk Ribbon, Prismatic Flow and Spectral Helix.
+- Player-position snapshots cross from the game crate into the renderer crate; no client packets.
+- Reversed-Z scene depth sampled in fragment shader, with scaled frame/depth mapping.
+- Camera-relative f64->f32 conversion, finite sample and vertex caps, per-device WGPU resource cache and adaptive vertex-buffer growth.
+- Native settings and `/aurora ribbon`, `ribbon-style`, `ribbon-demo` commands. Default OFF for safety.
+- Static regression tests for module legality, API58, render pipeline and commands.
+- **No game-run or FPS proof yet.** WGPU code must pass the official full Horizon compile before prerelease is published.
+
 # 0.6.0-rc.1 — PulseVisual-inspired original Rust cosmetics
 
 - Three input bursts: ring, layered burst, rising spiral.

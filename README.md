@@ -1,6 +1,6 @@
-> **What is new in v0.6.0:** Actual client-only 3D flame particles using Horizon's native particle API, not just player glow. Blue soul-flame ring on each local mouse click and a bounded 2-particle footstep trail while moving. No game packets, no hit-detection claims. Enabled by default; use `/aurora particles off` or `/aurora fire flame` to switch colors. Visible in the world, separate from the Aurora Nebula shader pack. Full Linux native compile / in-game performance verification is tracked by GitHub Actions.
+> **What is new in v0.7.0:** Actual client-only 3D flame particles using Horizon's native particle API, not just player glow. Blue soul-flame ring on each local mouse click and a bounded 2-particle footstep trail while moving. No game packets, no hit-detection claims. Enabled by default; use `/aurora particles off` or `/aurora fire flame` to switch colors. Visible in the world, separate from the Aurora Nebula shader pack. Full Linux native compile / in-game performance verification is tracked by GitHub Actions.
 
-# Horizon Aurora — experimental native visuals for Horizon (v0.6.0)
+# Horizon Aurora — experimental native visuals for Horizon (v0.7.0)
 
 The development home is **https://github.com/pneqnp-iswr/horizon-aurora**. Changes should be proposed through pull requests and recorded in the changelog.
 
@@ -186,11 +186,11 @@ powershell -NoProfile -File .\scripts\windows\aurora-native-preflight.ps1
 
 For cleanup and memory/stack-process recovery, see [Windows build recovery](docs/WINDOWS_BUILD_RECOVERY.md). Research notes: [Competitive technical audit](docs/COMPETITIVE_TECHNICAL_AUDIT.md).
 
-## Visible local 3D particles (0.6.0)
+## Visible local 3D particles (0.7.0)
 
 Use `/aurora particles on` to enable. Each click produces 3–6 vanilla flame particles around your feet; walking emits no more than two every four ticks. `/aurora fire soul` (blue) and `/aurora fire flame` (orange) choose a Minecraft-native particle. Both survive without a shaderpack and do not rely on fake screen brightness. The effect is client-local; the actual gameplay status and FPS cost must be checked on Windows. Night-sky visuals are independent: select Aurora Nebula in Horizon's shader pack menu.
 
-## PulseVisual-inspired FX patterns (0.6.0)
+## PulseVisual-inspired FX patterns (0.7.0)
 
 Ported original Rust implementations of effect patterns, limited geometry and animation math inspired by the **MIT** Java [PulseVisual](https://github.com/creeleystromberg-sketch/PulseVisual). These use Horizon's actual local native particles; Fabric Java and its JVM classes are not embedded.
 
@@ -207,3 +207,13 @@ Mouse-input particles **do not indicate confirmed hits**. The high-end 3D Ribbon
 ## Isolated VFX test
 
 In a singleplayer world (preferably third-person) run `/aurora particles on` and `/aurora demo` to queue a local particle burst without needing to click an entity. This bypasses mouse mapping for diagnostics only; it does not register or claim any combat hit. Disable ambient and the Aurora Nebula shader to tell real world particles apart from a brightness-only effect. `/aurora burst spiral` then `/aurora demo` switches the burst pattern. The demo command requires an actual in-world client tick to display particles.
+
+## Experimental WGPU ribbon renderer (0.7.0 RC candidate)
+
+**Architecture:** game tick -> bounded snapshot published to `horizon-client-render::gfx::native_render::aurora_gpu` -> render-thread history/spline/mesh generation -> WGPU pipeline -> depth-sampled alpha composite. The official pinned Horizon revision already contains **Native Render API 58** and the new hooks are injected into the renderer crate, not game.rs.
+
+Three procedural material styles use **actual world-space triangle geometry**: Silk Ribbon (pastel smooth), Prismatic Flow (multicolour gradient), Spectral Helix (twin offset strips). Shader samples the current world depth in the final framebuffer and compares **reversed-Z** (0 = sky). Camera coordinates are subtracted in f64 before f32 upload. GPU vertex buffers grow geometrically and are reused. Per-frame player snapshots cross the two crates by short-lived Mutex copies; GPU resources live only on the renderer thread.
+
+Native control commands: `/aurora ribbon on|off`, `/aurora ribbon-style silk|prismatic|spectral`, and `/aurora ribbon-demo on|off`. The synthetic demo draws a spiral near your avatar and needs no PvP or hit event. The feature starts **OFF** until explicitly enabled. The original native particles remain separate.
+
+**Verification statement:** GitHub Actions runs official `native.py check`, package and shader validator, plus local contract tests. This is a new experimental graphics slice; real in-world screenshots and performance measurements are required before claiming it visually verified, production ready or optimized. GPU time budgets remain targets only.

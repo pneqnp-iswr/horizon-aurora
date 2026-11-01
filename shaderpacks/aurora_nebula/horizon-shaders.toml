@@ -1,7 +1,7 @@
 schema = 1
 id = "aurora_nebula"
 name = "Aurora Nebula"
-version = "0.6.0"
+version = "0.7.0"
 api = "0.1"
 description = "Procedural northern light ribbons, delicate atmospheric tint, soft highlight bloom and restrained cinematic color grading."
 authors = ["Aurora Visuals community experiment"]
