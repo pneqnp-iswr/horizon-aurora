@@ -24,6 +24,8 @@ jobs:
           python3 tests/package.py
           python3 tests/shader_static.py
           python3 tests/package_shader.py
+      - name: Install Rust parser formatter
+        run: rustup component add rustfmt --toolchain 1.99.1
       - name: Parse every native Rust support payload before horizon-mixins
         run: |
           for file in mixins/aurora_visuals/*.rs; do
