@@ -130,11 +130,6 @@ struct Renderer {
 }
 thread_local! { static RENDERER: RefCell<Renderer> = RefCell::new(Renderer::default()); }
 
-fn spline(a: f64, b: f64, c: f64, d: f64, t: f64) -> f64 {
-    let t2 = t*t;
-    0.5 * (2.0*b + (c-a)*t + (2.0*a-5.0*b+4.0*c-d)*t2
-        + (-a+3.0*b-3.0*c+d)*t2*t)
-}
 fn hue_rgb(h: f32) -> [f32; 3] {
     let h = h.rem_euclid(1.0) * 6.0;
     let x = 1.0 - ((h % 2.0) - 1.0).abs();
@@ -437,9 +432,13 @@ mod tests {
             .validate(&module).expect("Aurora WGPU shader must validate");
     }
     #[test]
-    fn cubic_endpoint_invariants() {
-        assert_eq!(spline(0.,1.,2.,3.,0.),1.);
-        assert_eq!(spline(0.,1.,2.,3.,1.),2.);
+    fn centripetal_endpoint_invariants() {
+        let p0 = [0.0, -1.0, 0.5];
+        let p1 = [1.0, 2.0, 3.0];
+        let p2 = [2.0, 4.0, 6.0];
+        let p3 = [4.0, 5.0, 7.0];
+        assert_eq!(centripetal(p0, p1, p2, p3, 0.0), p1);
+        assert_eq!(centripetal(p0, p1, p2, p3, 1.0), p2);
     }
     #[test]
     fn continuous_strip_has_identical_shared_join_vertices(){

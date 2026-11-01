@@ -35,7 +35,7 @@ class NativeGpuRibbonContract(unittest.TestCase):
             "ALPHA_BLENDING", "POINT_LIMIT: usize = 72",
             "VERTEX_LIMIT: usize = 8192", "relative(p: [f64;3]",
             "device_address", "world.queue.write_buffer",
-            "spline(", "pub fn publish(", "pub fn inactive(",
+            "centripetal(", "pub fn publish(", "pub fn inactive(",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, gpu)
