@@ -452,6 +452,27 @@ mod tests {
         assert_eq!(&v[5][..3],&v[7][..3]);
     }
     #[test]
+    fn demo_animation_epoch_survives_sequential_client_snapshots() {
+        let t=Instant::now();
+        let mut renderer=Renderer::default();
+        let mut snapshot=Snapshot {
+            position:Some([0.0,0.0,0.0]), dimension:42, style:0,
+            enabled:true,demo:true,sequence:1,updated:t,
+        };
+        renderer.accept(snapshot,t);
+        renderer.build(DVec3::new(0.0,0.0,4.0),snapshot,t);
+        assert!(!renderer.staging.is_empty());
+        let origin=renderer.demo_epoch;
+        let later=t+Duration::from_millis(250);
+        snapshot.sequence+=1;
+        snapshot.updated=later;
+        renderer.accept(snapshot,later);
+        renderer.build(DVec3::new(0.0,0.0,4.0),snapshot,later);
+        assert_eq!(renderer.demo_epoch,origin);
+        assert_eq!(renderer.animation_epoch,0);
+        assert!(!renderer.staging.is_empty());
+    }
+    #[test]
     fn per_point_age_fade_is_bounded(){
         let now=Instant::now();
         assert_eq!(point_opacity(now,now),0.0);
