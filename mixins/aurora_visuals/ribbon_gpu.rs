@@ -102,6 +102,7 @@ struct Renderer {
     points: VecDeque<Point>,
     staging: Vec<[f32; 8]>,
     samples: Vec<(Vec3,f32)>,
+    demo_epoch: Option<Instant>,
     gpu: Option<Gpu>,
 }
 thread_local! { static RENDERER: RefCell<Renderer> = RefCell::new(Renderer::default()); }
@@ -145,7 +146,7 @@ fn ribbon_triangles(out: &mut Vec<[f32;8]>, a:Vec3, b:Vec3, side:Vec3,
     out.extend_from_slice(&[v(aa,ca),v(ab,ca),v(ba,cb),v(ba,cb),v(ab,ca),v(bb,cb)]);
 }
 impl Renderer {
-    fn reset_path(&mut self) { self.points.clear(); self.previous_sequence=0; }
+    fn reset_path(&mut self) { self.points.clear(); self.previous_sequence=0; self.demo_epoch=None; }
 
     fn accept(&mut self, snapshot: Snapshot, now: Instant) {
         if self.dimension!=snapshot.dimension {self.reset_path();self.dimension=snapshot.dimension;}
@@ -176,7 +177,8 @@ impl Renderer {
         if snapshot.demo {
             let center=match snapshot.position {Some(p)=>p,None=>return};
             let center=relative(center,camera);
-            let clock=now.duration_since(snapshot.updated).as_secs_f32();
+            let start=*self.demo_epoch.get_or_insert(now);
+            let clock=now.duration_since(start).as_secs_f32();
             for i in 0..32 {
                 let t=i as f32/31.0;
                 let a=t*std::f32::consts::TAU*1.35+clock*0.6;
