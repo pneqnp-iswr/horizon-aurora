@@ -53,6 +53,12 @@ jobs:
         working-directory: /tmp/horizon-mods
         run: python3 native/tools/native.py check aurora
 
+      - name: Run renderer geometry and WGSL validation tests in staged Horizon
+        working-directory: /tmp/horizon-mods/native/target/stage/aurora_visuals
+        env:
+          CARGO_TARGET_DIR: /tmp/horizon-mods/native/target/cargo
+        run: cargo test --locked -p horizon-client-render --lib aurora_gpu::tests -- --nocapture
+
       - name: Rebuild .hnmod with official Horizon packaging
         working-directory: /tmp/horizon-mods
         run: python3 native/tools/native.py package aurora
