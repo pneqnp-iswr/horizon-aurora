@@ -298,8 +298,10 @@ impl Renderer {
         }
         self.accept(snapshot,now);
         self.build(world.camera,snapshot,now);
-        if self.staging.is_empty() || world.size[0]==0 || world.size[1]==0 {return;}
+        if world.size[0]==0 || world.size[1]==0 {return;}
+        // Prewarm the pipeline on the first enabled world frame, before moving.
         self.ensure_gpu(world);
+        if self.staging.is_empty() {return;}
         let gpu=self.gpu.as_mut().expect("ensure_gpu initialized resources");
         let count=self.staging.len().min(VERTEX_LIMIT);
         if count>gpu.capacity {
