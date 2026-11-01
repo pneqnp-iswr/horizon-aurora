@@ -53,7 +53,7 @@ class NativeGpuRibbonContract(unittest.TestCase):
             "per_point_age_fade_is_bounded", "centripetal_segment_is_bounded",
             "shader_location:2", "edge_alpha", "snapshot.updated",
             'reset_path("teleport")', 'reset_path("dimension_transition")',
-            "AURORA_RIBBON_DIAG",
+            "AURORA_RIBBON_DIAG", "player_available=",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, gpu)
@@ -76,6 +76,8 @@ class NativeGpuRibbonContract(unittest.TestCase):
         server_guard = tick.split("if !game.native_window() {", 1)[1].split("}", 1)[0]
         self.assertIn("return;", server_guard)
         self.assertNotIn("aurora_gpu::inactive()", server_guard)
+        self.assertIn("role=integrated_server", tick)
+        self.assertIn("LOGGED.swap(true", tick)
         client_guard = tick.split("if !game.native_on(m::ID) {", 1)[1].split("}", 1)[0]
         self.assertIn("aurora_gpu::inactive()", client_guard)
         self.assertLess(tick.index("if !game.native_window() {"), tick.index("if !game.native_on(m::ID) {"))
