@@ -80,7 +80,17 @@ pub fn publish(dimension: &str, pos: Option<[f64; 3]>, enabled: bool, style: usi
 }
 pub fn inactive() { publish("", None, false, 0, false); }
 pub fn needs(needs: &mut RenderNeeds) {
-    if lock_bridge().snapshot.enabled { needs.world_depth = true; }
+    if lock_bridge().snapshot.enabled {
+        needs.world_depth = true;
+    } else {
+        // The renderer asks for needs even on non-world frames. Release GPU
+        // resources promptly when disabled or when a world closes.
+        RENDERER.with(|cell| {
+            let mut renderer = cell.borrow_mut();
+            renderer.reset_path();
+            renderer.gpu = None;
+        });
+    }
 }
 
 #[derive(Clone, Copy)]
