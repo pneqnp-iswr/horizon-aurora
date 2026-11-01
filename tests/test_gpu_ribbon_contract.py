@@ -44,6 +44,28 @@ class NativeGpuRibbonContract(unittest.TestCase):
         self.assertNotRegex(gpu, r"(?m)^\s*//!")
 
 
+    def test_continuous_gpu_ribbon_geometry_and_fades(self):
+        gpu = (MOD / "ribbon_gpu.rs").read_text()
+        for marker in (
+            "fn centripetal(", "fn stable_side(", "fn point_opacity(",
+            "strand_points: Vec<Vec3>", "sides: Vec<Vec3>",
+            "continuous_strip_has_identical_shared_join_vertices",
+            "per_point_age_fade_is_bounded", "centripetal_segment_is_bounded",
+            "shader_location:2", "edge_alpha", "snapshot.updated",
+            'reset_path("teleport")', 'reset_path("dimension_transition")',
+            "AURORA_RIBBON_DIAG",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, gpu)
+        # Geometric continuity requires distinct per-vertex side vectors,
+        # never a single side vector shared by both ends of a bent segment.
+        self.assertIn("self.sides[i-1],self.sides[i]", gpu)
+        self.assertNotIn("let mut previous_side:Option<Vec3>", gpu)
+        # The scene/paused render path must not reset the epoch on a timeout.
+        self.assertNotRegex(
+            gpu, r"snapshot\\.updated\\)\\s*>\\s*Duration::from_secs\\(2\\)\\s*\\{\\s*self\\.reset_path"
+        )
+
     def test_integrated_server_tick_cannot_reset_client_ribbon(self):
         """Horizon singleplayer invokes native_tick for BOTH client and local server Game."""
         tick = (MOD / "tick.rs").read_text()
