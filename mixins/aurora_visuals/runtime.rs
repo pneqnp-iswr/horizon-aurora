@@ -4,7 +4,7 @@ use std::cell::{Cell, RefCell};
 
 pub const ID: &str = "aurora_visuals";
 pub const NAME: &str = "Aurora Visuals";
-pub const VERSION: &str = "0.6.0";
+pub const VERSION: &str = "0.7.0";
 pub const DESCRIPTION: &str = "Native HUD, local aurora light trails, input flares, graphs and accessible visual settings. No combat automation.";
 pub const CORNERS: [(&str, &str); 4] = [
     ("top_left", "Top left"), ("top_right", "Top right"),
@@ -28,6 +28,7 @@ pub const TEXT: u32 = 0xF3F3FF;
 pub const MUTED: u32 = 0xA5AFC1;
 pub const BURST_STYLES: [&str; 3] = ["ring", "burst", "spiral"];
 pub const TRAIL_STYLES: [&str; 4] = ["off", "line", "twin", "helix"];
+pub const RIBBON_STYLES: [(&str, &str); 3] = [("silk", "Silk Ribbon"),("prismatic","Prismatic Flow"),("spectral","Spectral Helix")];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Settings {
@@ -49,6 +50,9 @@ pub struct Settings {
     pub burst_style: usize,
     pub trail_style: usize,
     pub particle_crown: bool,
+    pub ribbon_enabled: bool,
+    pub ribbon_style: usize,
+    pub ribbon_demo: bool,
     pub click_flare: bool,
     pub adaptive_quality: bool,
     pub compact: bool,
@@ -60,7 +64,7 @@ impl Default for Settings {
         Self {
             shown: true, corner: 1, theme: 0, preset: 0,
             fps: true, cps: true, keys: true, speed: true, coords: false,
-            graph: true, feedback: true, ambient: false, trail: false, particles: true, soul_particles: true, burst_style: 0, trail_style: 1, particle_crown: false, click_flare: true, adaptive_quality: true, compact: false,
+            graph: true, feedback: true, ambient: false, trail: false, particles: true, soul_particles: true, burst_style: 0, trail_style: 1, particle_crown: false, ribbon_enabled: false, ribbon_style: 0, ribbon_demo: false, click_flare: true, adaptive_quality: true, compact: false,
             reduced_motion: false,
         }
     }
@@ -125,6 +129,9 @@ impl Settings {
         s.burst_style = choose("burst_style", &BURST_STYLES, 0);
         s.trail_style = choose("trail_style", &TRAIL_STYLES, 1);
         s.particle_crown = read_bool("particle_crown", s.particle_crown);
+        s.ribbon_enabled = read_bool("ribbon_enabled", s.ribbon_enabled);
+        s.ribbon_demo = read_bool("ribbon_demo", s.ribbon_demo);
+        s.ribbon_style = choose("ribbon_style", &["silk", "prismatic", "spectral"], 0);
         s.click_flare = read_bool("click_flare", s.click_flare);
         s.adaptive_quality = read_bool("adaptive_quality", s.adaptive_quality);
         s.compact = read_bool("compact", s.compact);
@@ -155,6 +162,9 @@ impl Settings {
             19 => self.burst_style = (self.burst_style + 1) % BURST_STYLES.len(),
             20 => self.trail_style = (self.trail_style + 1) % TRAIL_STYLES.len(),
             21 => self.particle_crown = !self.particle_crown,
+            22 => self.ribbon_enabled = !self.ribbon_enabled,
+            23 => self.ribbon_style = (self.ribbon_style + 1) % RIBBON_STYLES.len(),
+            24 => self.ribbon_demo = !self.ribbon_demo,
             _ => {}
         }
     }
@@ -183,6 +193,9 @@ impl Settings {
             format!("Click pattern: {}", BURST_STYLES[self.burst_style]),
             format!("Movement pattern: {}", TRAIL_STYLES[self.trail_style]),
             format!("Particle crown: {}", on(self.particle_crown)),
+            format!("GPU ribbons (API 58): {}", on(self.ribbon_enabled)),
+            format!("Ribbon style: {}", RIBBON_STYLES[self.ribbon_style].1),
+            format!("Ribbon demo geometry: {}", on(self.ribbon_demo)),
         ]
     }
     pub fn stored(&self) -> Vec<(&'static str, String)> {
@@ -208,6 +221,9 @@ impl Settings {
             ("burst_style", BURST_STYLES[self.burst_style].into()),
             ("trail_style", TRAIL_STYLES[self.trail_style].into()),
             ("particle_crown", boolean(self.particle_crown)),
+            ("ribbon_enabled", boolean(self.ribbon_enabled)),
+            ("ribbon_style", RIBBON_STYLES[self.ribbon_style].0.into()),
+            ("ribbon_demo", boolean(self.ribbon_demo)),
             ("click_flare", boolean(self.click_flare)),
             ("adaptive_quality", boolean(self.adaptive_quality)),
             ("schema", "2".to_owned()),

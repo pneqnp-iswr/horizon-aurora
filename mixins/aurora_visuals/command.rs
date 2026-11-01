@@ -12,7 +12,8 @@ fn aurora_command(game: &mut crate::game::Game<'_>, command: &str, ran: &mut boo
         (None, None) | (Some("help"), None) => {
             game.native_chat("/aurora toggle | preset combat|minimal|streamer | theme violet|cyan|amber|rose|mint|electric|scarlet");
             game.native_chat("/aurora graph|feedback|ambient|compact|motion|trail|flare|adaptive|particles|crown on|off");
-            game.native_chat("/aurora demo | fire soul|flame | burst ring|burst|spiral | path off|line|twin|helix | reset");
+            game.native_chat("/aurora demo | ribbon on|off | ribbon-demo on|off | ribbon-style silk|prismatic|spectral");
+            game.native_chat("/aurora fire soul|flame | burst ring|burst|spiral | path off|line|twin|helix | reset");
             return;
         }
         (Some("demo"), None) => {
@@ -26,6 +27,10 @@ fn aurora_command(game: &mut crate::game::Game<'_>, command: &str, ran: &mut boo
         (Some("preset"), Some(value)) => {
             if let Some(index) = m::PRESETS.iter().position(|p| p.0 == value) { s.apply_preset(index); }
             else { game.native_chat("Aurora: unknown preset."); return; }
+        }
+        (Some("ribbon-style"), Some(value)) => {
+            if let Some(i) = m::RIBBON_STYLES.iter().position(|v| v.0 == value) { s.ribbon_style = i; }
+            else { game.native_chat("Aurora: ribbon-style silk|prismatic|spectral"); return; }
         }
         (Some("burst"), Some(value)) => {
             if let Some(i) = m::BURST_STYLES.iter().position(|v| *v == value) { s.burst_style = i; }
@@ -46,7 +51,7 @@ fn aurora_command(game: &mut crate::game::Game<'_>, command: &str, ran: &mut boo
             if let Some(index) = m::THEMES.iter().position(|t| t.0 == value) { s.theme = index; }
             else { game.native_chat("Aurora: unknown theme."); return; }
         }
-        (Some(field @ ("graph" | "feedback" | "ambient" | "compact" | "motion" | "trail" | "flare" | "adaptive" | "particles" | "crown")), Some(value)) => {
+        (Some(field @ ("graph" | "feedback" | "ambient" | "compact" | "motion" | "trail" | "flare" | "adaptive" | "particles" | "crown" | "ribbon" | "ribbon-demo")), Some(value)) => {
             let flag = match value { "on" => true, "off" => false, _ => {
                 game.native_chat("Aurora: use on or off."); return;
             } };
@@ -61,6 +66,8 @@ fn aurora_command(game: &mut crate::game::Game<'_>, command: &str, ran: &mut boo
                 "adaptive" => s.adaptive_quality = flag,
                 "particles" => s.particles = flag,
                 "crown" => s.particle_crown = flag,
+                "ribbon" => s.ribbon_enabled = flag,
+                "ribbon-demo" => s.ribbon_demo = flag,
                 _ => unreachable!(),
             }
         }

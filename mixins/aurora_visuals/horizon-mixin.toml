@@ -1,6 +1,6 @@
 [mod]
 id = "aurora_visuals"
-version = "0.6.0"
+version = "0.7.0"
 priority = 100
 
 [compatibility]
@@ -11,6 +11,32 @@ id = "runtime"
 file = "crates/horizon-client/src/game.rs"
 name = "aurora_visuals"
 source = "runtime.rs"
+
+# API 58 graphics hooks are in horizon-client-render, not game.rs.
+[[module]]
+id = "gpu_renderer"
+file = "crates/horizon-client-render/src/gfx/native_render.rs"
+name = "aurora_gpu"
+source = "ribbon_gpu.rs"
+visibility = "pub"
+
+[[injection]]
+id = "gpu_needs"
+kind = "HEAD"
+target = "horizon_client_render::gfx::native_render::native_render_needs"
+helper = "gpu_needs.rs"
+bindings = [
+  { name = "needs", ty = "&mut crate::gfx::native_render::RenderNeeds", value = "&mut *needs" },
+]
+
+[[injection]]
+id = "gpu_world"
+kind = "HEAD"
+target = "horizon_client_render::gfx::native_render::native_world_drawn"
+helper = "gpu_world.rs"
+bindings = [
+  { name = "world", ty = "&mut crate::gfx::native_render::WorldDrawn<'_>", value = "&mut *world" },
+]
 
 [[injection]]
 id = "list"
