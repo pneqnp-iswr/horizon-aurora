@@ -101,6 +101,7 @@ struct Renderer {
     dimension: u64,
     points: VecDeque<Point>,
     staging: Vec<[f32; 8]>,
+    samples: Vec<(Vec3,f32)>,
     gpu: Option<Gpu>,
 }
 thread_local! { static RENDERER: RefCell<Renderer> = RefCell::new(Renderer::default()); }
@@ -129,7 +130,10 @@ fn color(style: u8, t: f32, strand: usize) -> [f32; 4] {
         _ => [0.85,0.35,1.0,0.76],
     }
 }
-fn vec3(p: [f64;3]) -> Vec3 { Vec3::new(p[0] as f32,p[1] as f32,p[2] as f32) }
+fn relative(p: [f64;3], camera:DVec3) -> Vec3 {
+    // Subtract in f64 before narrowing: avoids far-from-origin wobble.
+    Vec3::new((p[0]-camera.x) as f32,(p[1]-camera.y) as f32,(p[2]-camera.z) as f32)
+}
 fn ribbon_triangles(out: &mut Vec<[f32;8]>, a:Vec3, b:Vec3, side:Vec3,
                     ca:[f32;4], cb:[f32;4], width_a:f32, width_b:f32) {
     if out.len()+6 > VERTEX_LIMIT {return;}
@@ -148,13 +152,16 @@ impl Renderer {
         if self.previous_sequence!=snapshot.sequence {
             self.previous_sequence=snapshot.sequence;
             if let Some(pos)=snapshot.position {
+                let mut add=true;
                 if let Some(last)=self.points.back() {
                     let d = (pos[0]-last.at[0]).hypot(pos[1]-last.at[1]).hypot(pos[2]-last.at[2]);
                     if d > 8.0 {self.reset_path();}
-                    else if d < 0.035 {return;}
+                    else if d < 0.035 {add=false;}
                 }
-                if self.points.len()>=POINT_LIMIT {self.points.pop_front();}
-                self.points.push_back(Point {at:pos,stamp:now});
+                if add {
+                    if self.points.len()>=POINT_LIMIT {self.points.pop_front();}
+                    self.points.push_back(Point {at:pos,stamp:now});
+                }
             }
         }
         while self.points.front().is_some_and(|p| now.duration_since(p.stamp)>LIFETIME) {
@@ -165,18 +172,17 @@ impl Renderer {
     fn build(&mut self, camera:DVec3, snapshot:Snapshot, now:Instant) {
         self.staging.clear();
         if self.points.len()<2 && !snapshot.demo {return;}
-        let mut samples:Vec<(Vec3,f32)> = Vec::with_capacity(POINT_LIMIT*4+32);
+        self.samples.clear();
         if snapshot.demo {
             let center=match snapshot.position {Some(p)=>p,None=>return};
+            let center=relative(center,camera);
             let clock=now.duration_since(snapshot.updated).as_secs_f32();
             for i in 0..32 {
                 let t=i as f32/31.0;
                 let a=t*std::f32::consts::TAU*1.35+clock*0.6;
                 let radius=0.65+0.38*t;
-                let p=Vec3::new(center[0] as f32 + a.cos()*radius,
-                    center[1] as f32+0.25+1.35*t,
-                    center[2] as f32+a.sin()*radius);
-                samples.push((p,t));
+                let p=center+Vec3::new(a.cos()*radius,0.25+1.35*t,a.sin()*radius);
+                self.samples.push((p,t));
             }
         } else {
             let length=self.points.len();
@@ -188,17 +194,17 @@ impl Renderer {
                 for sub in 0..4 {
                     let t=sub as f64/4.0;
                     let xyz=[0,1,2].map(|n| spline(p0[n],p1[n],p2[n],p3[n],t));
-                    samples.push((vec3(xyz), (k as f32+sub as f32/4.0)/(length-1) as f32));
+                    self.samples.push((relative(xyz,camera), (k as f32+sub as f32/4.0)/(length-1) as f32));
                 }
             }
-            samples.push((vec3(self.points[length-1].at),1.0));
+            self.samples.push((relative(self.points[length-1].at,camera),1.0));
         }
         let count=if snapshot.style==2 {2}else{1};
-        let origin=Vec3::new(camera.x as f32,camera.y as f32,camera.z as f32);
+        let origin=Vec3::ZERO;
         for strand in 0..count {
             let mut previous_side:Option<Vec3>=None;
-            for i in 1..samples.len(){
-                let (mut a,t0)=samples[i-1];let (mut b,t1)=samples[i];
+            for i in 1..self.samples.len(){
+                let (mut a,t0)=self.samples[i-1];let (mut b,t1)=self.samples[i];
                 if snapshot.style==2 {
                     let wave0=(t0*std::f32::consts::TAU*3.0+strand as f32*std::f32::consts::PI).sin();
                     let wave1=(t1*std::f32::consts::TAU*3.0+strand as f32*std::f32::consts::PI).sin();
@@ -223,7 +229,7 @@ impl Renderer {
                 let mut cb=color(snapshot.style,t1,strand);
                 ca[3]*=agefade(t0);cb[3]*=agefade(t1);
                 // World values are converted to camera-relative f32 for precision.
-                ribbon_triangles(&mut self.staging,a-origin,b-origin,side,ca,cb,
+                ribbon_triangles(&mut self.staging,a,b,side,ca,cb,
                                 width*taper(t0),width*taper(t1));
             }
         }
