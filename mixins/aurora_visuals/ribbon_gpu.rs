@@ -5,7 +5,6 @@
 
 use std::{cell::RefCell, collections::VecDeque, sync::{Mutex, OnceLock}, time::{Duration, Instant}};
 use glam::{Vec3, DVec3};
-use wgpu::util::DeviceExt;
 use super::{RenderNeeds, WorldDrawn};
 
 const POINT_LIMIT: usize = 72;
@@ -342,6 +341,13 @@ pub fn draw(world:&mut WorldDrawn<'_>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn ribbon_shader_parses_and_validates_with_naga() {
+        let module=naga::front::wgsl::parse_str(WGSL).expect("Aurora WGPU WGSL must parse");
+        naga::valid::Validator::new(naga::valid::ValidationFlags::all(),
+                                    naga::valid::Capabilities::all())
+            .validate(&module).expect("Aurora WGPU shader must validate");
+    }
     #[test]
     fn cubic_endpoint_invariants() {
         assert_eq!(spline(0.,1.,2.,3.,0.),1.);
