@@ -43,6 +43,22 @@ class NativeGpuRibbonContract(unittest.TestCase):
         self.assertNotRegex(gpu, r"(?m)^\s*#!")
         self.assertNotRegex(gpu, r"(?m)^\s*//!")
 
+
+    def test_integrated_server_tick_cannot_reset_client_ribbon(self):
+        """Horizon singleplayer invokes native_tick for BOTH client and local server Game."""
+        tick = (MOD / "tick.rs").read_text()
+        self.assertIn("if !game.native_window() {", tick)
+        self.assertIn("if !game.native_on(m::ID) {", tick)
+        self.assertNotIn("!game.native_window() ||", tick)
+        # The server-role early return must precede ANY shared GPU state mutation.
+        server_guard = tick.split("if !game.native_window() {", 1)[1].split("}", 1)[0]
+        self.assertIn("return;", server_guard)
+        self.assertNotIn("aurora_gpu::inactive()", server_guard)
+        client_guard = tick.split("if !game.native_on(m::ID) {", 1)[1].split("}", 1)[0]
+        self.assertIn("aurora_gpu::inactive()", client_guard)
+        self.assertLess(tick.index("if !game.native_window() {"), tick.index("if !game.native_on(m::ID) {"))
+        self.assertLess(tick.index("if !game.native_on(m::ID) {"), tick.index("aurora_gpu::publish("))
+
     def test_game_snapshot_and_live_controls(self):
         tick = (MOD / "tick.rs").read_text()
         cmd = (MOD / "command.rs").read_text()

@@ -4,7 +4,7 @@ use std::cell::{Cell, RefCell};
 
 pub const ID: &str = "aurora_visuals";
 pub const NAME: &str = "Aurora Visuals";
-pub const VERSION: &str = "0.7.0";
+pub const VERSION: &str = "0.7.1";
 pub const DESCRIPTION: &str = "Native HUD, local aurora light trails, input flares, graphs and accessible visual settings. No combat automation.";
 pub const CORNERS: [(&str, &str); 4] = [
     ("top_left", "Top left"), ("top_right", "Top right"),

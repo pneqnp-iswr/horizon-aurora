@@ -1,10 +1,10 @@
 [package]
 name = "aurora-horizon-visuals"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2024"
 license = "MIT"
 publish = false
-description = "Aurora Visuals: native Horizon PvP and performance HUD, version 0.7.0"
+description = "Aurora Visuals: native Horizon PvP and performance HUD, version 0.7.1"
 
 [lib]
 path = "mixins/aurora_visuals/runtime.rs"

@@ -1,6 +1,13 @@
 fn aurora_tick(game: &mut crate::game::Game<'_>) {
     use crate::game::aurora_visuals as m;
-    if !game.native_window() || !game.native_on(m::ID) {
+    // In singleplayer Horizon ticks both the client Game and its integrated
+    // server Game in one process. Server ticks must NEVER clear the shared
+    // client GPU snapshot, or ribbons restart between client frames.
+    if !game.native_window() {
+        return;
+    }
+    // Only the window/client Game owns activation and teardown of its visuals.
+    if !game.native_on(m::ID) {
         horizon_client_render::gfx::native_render::aurora_gpu::inactive();
         return;
     }

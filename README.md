@@ -1,12 +1,12 @@
-> **What is new in v0.7.0:** Actual client-only 3D flame particles using Horizon's native particle API, not just player glow. Blue soul-flame ring on each local mouse click and a bounded 2-particle footstep trail while moving. No game packets, no hit-detection claims. Enabled by default; use `/aurora particles off` or `/aurora fire flame` to switch colors. Visible in the world, separate from the Aurora Nebula shader pack. Full Linux native compile / in-game performance verification is tracked by GitHub Actions.
+> **v0.7.1 RC1:** Fixes a singleplayer-specific WGPU ribbon reset: the integrated server must not disable the client's shared GPU state. v0.7.0 introduced WGPU triangle-mesh ribbons. User screenshots show ribbon geometry in multiplayer; stable singleplayer operation still needs a retest with this hotfix. Standard flame particles remain available as a separate effect.
 
-# Horizon Aurora — experimental native visuals for Horizon (v0.7.0)
+# Horizon Aurora — experimental native visuals for Horizon (v0.7.1)
 
 The development home is **https://github.com/pneqnp-iswr/horizon-aurora**. Changes should be proposed through pull requests and recorded in the changelog.
 
 A **community experimental Rust native mod** for Horizon, targeting Minecraft 26.3. The `.hnmod` is **readable source packed for the Horizon launcher**, not a precompiled binary or a Java/Fabric/Forge mod.
 
-> **Status (1 November 2026):** v0.3.0 RC1 passed full official Horizon Linux native compile and WGSL validation. v0.4.0 adds a procedural starfield, committed Studio demo and Windows build diagnostics. Actual Windows gameplay and performance are still unverified.
+> **Status (1 November 2026):** v0.7.0 passed official Linux Horizon render integration and Naga validation; player-provided screenshots show WGPU ribbons in multiplayer, with repeated resetting in singleplayer. v0.7.1 RC1 addresses the integrated server/client state conflict in source; the singleplayer outcome and FPS still need an on-device retest.
 
 ## What's available in 0.4.0
 

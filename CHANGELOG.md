@@ -1,3 +1,11 @@
+# 0.7.1-rc.1 — singleplayer ribbon stability hotfix
+
+- Fixed integrated-server native_tick clearing the process-shared GPU ribbon snapshot in singleplayer. Non-window/server game ticks now return without mutating client-owned GPU state.
+- Client-side mod disable, player absence and world transition teardown remain in place.
+- Added a regression that enforces the client/server guard order and verifies that only the client can request aurora_gpu::inactive().
+- Bumped mod and shader package versions to release separately from immutable 0.7.0.
+- User-provided gameplay screenshots show ribbon geometry in multiplayer and intermittent reset in singleplayer. The source-level cause is consistent with those observations; the fix still needs on-device singleplayer retesting.
+- No new graphics shaders or measured FPS claims.
 # 0.7.0-rc.1 — experimental true WGPU Ribbon Renderer
 
 - Added real geometry renderer to Horizon's API 58 `native_world_drawn` and `native_render_needs` hooks.
