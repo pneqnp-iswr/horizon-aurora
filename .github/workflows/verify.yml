@@ -24,6 +24,11 @@ jobs:
           python3 tests/package.py
           python3 tests/shader_static.py
           python3 tests/package_shader.py
+      - name: Parse every native Rust support payload before horizon-mixins
+        run: |
+          for file in mixins/aurora_visuals/*.rs; do
+            rustfmt --edition 2024 --emit stdout "$file" >/dev/null
+          done
       - name: Pure Rust unit tests
         run: cargo test --manifest-path Cargo.toml
       - name: Verify Aurora Nebula with official Horizon WGSL checker
