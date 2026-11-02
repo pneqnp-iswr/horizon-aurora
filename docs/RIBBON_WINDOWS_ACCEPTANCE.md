@@ -34,6 +34,7 @@ Use same Horizon revision, render distance, shader pack, resolution, GPU and sce
 ## New visual regression checks
 
 - Enable TAA and compare ribbon/terrain intersections at a fixed camera and moving camera. The depth-aware edge must remain aligned with world geometry; repeat at lower render resolution.
+- With Spectral Helix enabled, change camera position without moving the player. The strands must retain world-space orientation instead of following the camera.
 - Switch between first and third person, and resize the game: screen-space antialiasing must look comparable in apparent pixel width.
 - Select `/aurora ribbon-style spectral` with demo mode ON: confirm that two distinct strands rotate *around* the central path, at opposite phases, and don't collapse to one wobbling diagonal.
 - Confirm no asymmetric shimmer introduced by world `jittered` projection. Record videos with TAA enabled and disabled where available.
