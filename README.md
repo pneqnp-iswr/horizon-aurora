@@ -1,6 +1,8 @@
+> **Unreleased Aurora v0.7.2 RC1 candidate — PR #5:** Continuous shared ribbon joins, bounded parallel-transport frames, independent age fading and optional WGPU command-submission telemetry are being verified. They are **not included in v0.7.1 RC1**. Linux native integration, Naga validation and actual Windows singleplayer/multiplayer smoke tests remain required. See [Windows acceptance matrix](docs/RIBBON_WINDOWS_ACCEPTANCE.md). `AURORA_RIBBON_DIAG=1` prints sparse CPU-side diagnostics, **not GPU timing**.
+
 > **v0.7.1 RC1:** Fixes a singleplayer-specific WGPU ribbon reset: the integrated server must not disable the client's shared GPU state. v0.7.0 introduced WGPU triangle-mesh ribbons. User screenshots show ribbon geometry in multiplayer; stable singleplayer operation still needs a retest with this hotfix. Standard flame particles remain available as a separate effect.
 
-# Horizon Aurora — experimental native visuals for Horizon (v0.7.1)
+# Horizon Aurora — experimental native visuals for Horizon (v0.7.2 candidate)
 
 The development home is **https://github.com/pneqnp-iswr/horizon-aurora**. Changes should be proposed through pull requests and recorded in the changelog.
 

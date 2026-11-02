@@ -29,20 +29,62 @@ class NativeGpuRibbonContract(unittest.TestCase):
     def test_real_vertex_pipeline_and_depth_semantics(self):
         gpu = (MOD / "ribbon_gpu.rs").read_text()
         for marker in (
-            "create_render_pipeline(", "pass.draw(", "view_proj.to_cols_array()",
+            "create_render_pipeline(", "pass.draw(", "jittered.to_cols_array()", "fwidth(input.edge)",
             "WorldDrawn<'_>", "world_depth = true", "reversed depth",
             "textureLoad(scene_depth", "TextureSampleType::Depth",
             "ALPHA_BLENDING", "POINT_LIMIT: usize = 72",
             "VERTEX_LIMIT: usize = 8192", "relative(p: [f64;3]",
             "device_address", "world.queue.write_buffer",
-            "spline(", "pub fn publish(", "pub fn inactive(",
+            "centripetal(", "pub fn publish(", "pub fn inactive(",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, gpu)
+        self.assertNotIn("world.view_proj.to_cols_array()", gpu)
+        self.assertNotIn("smoothstep(0.72, 1.0", gpu)
+        self.assertNotIn("let wave=phase.sin()", gpu)
+        self.assertIn("let side=helix_side(axis,previous_helix_frame)", gpu)
+        self.assertNotIn("stable_side(axis,p,previous_helix_frame)", gpu)
         self.assertNotIn("native_flame_particle", gpu)
         self.assertNotRegex(gpu, r"(?m)^\s*#!")
         self.assertNotRegex(gpu, r"(?m)^\s*//!")
 
+
+    def test_continuous_gpu_ribbon_geometry_and_fades(self):
+        gpu = (MOD / "ribbon_gpu.rs").read_text()
+        for marker in (
+            "fn centripetal(", "fn stable_side(", "fn point_opacity(",
+            "strand_points: Vec<Vec3>", "sides: Vec<Vec3>",
+            "continuous_strip_has_identical_shared_join_vertices",
+            "per_point_age_fade_is_bounded", "centripetal_segment_is_bounded",
+            "shader_location:2", "edge_alpha", "snapshot.updated",
+            'reset_path("teleport")', 'reset_path("dimension_transition")',
+            "AURORA_RIBBON_DIAG", "player_available=",
+            "frame_transport_stays_orthogonal_and_avoids_roll_flips",
+            "camera_facing_near_collinear_uses_transport",
+            "full_motion_strip_has_watertight_sample_joins",
+            "teleport_and_dimension_change_reset_path_once",
+            "geometry_staging_is_preallocated_and_bounded",
+            "staging:Vec::with_capacity(VERTEX_LIMIT)",
+            "let capacity=VERTEX_LIMIT;",
+            "perf_buffer_reallocs", "perf_gpu_recreates",
+            "spectral_helix_centerline_is_camera_translation_invariant",
+            "helix_frame_does_not_depend_on_camera_position",
+            "helix_basis_transports_through_near_vertical_motion",
+            "fn helix_side(",
+            "spectral_helix_has_opposite_rotating_radial_strands",
+            "fn helix_offset(", "helix_offset(axis,side,phase,0.20)",
+            "cpu_submit_avg_us",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, gpu)
+        # Geometric continuity requires distinct per-vertex side vectors,
+        # never a single side vector shared by both ends of a bent segment.
+        self.assertIn("self.sides[i-1],self.sides[i]", gpu)
+        self.assertNotIn("let mut previous_side:Option<Vec3>", gpu)
+        # The scene/paused render path must not reset the epoch on a timeout.
+        self.assertNotRegex(
+            gpu, r"snapshot\.updated\)\s*>\s*Duration::from_secs\(2\)\s*\{\s*self\.reset_path"
+        )
 
     def test_integrated_server_tick_cannot_reset_client_ribbon(self):
         """Horizon singleplayer invokes native_tick for BOTH client and local server Game."""
@@ -51,9 +93,11 @@ class NativeGpuRibbonContract(unittest.TestCase):
         self.assertIn("if !game.native_on(m::ID) {", tick)
         self.assertNotIn("!game.native_window() ||", tick)
         # The server-role early return must precede ANY shared GPU state mutation.
-        server_guard = tick.split("if !game.native_window() {", 1)[1].split("}", 1)[0]
+        server_guard = tick.split("if !game.native_window() {", 1)[1].split("if !game.native_on(m::ID) {", 1)[0]
         self.assertIn("return;", server_guard)
         self.assertNotIn("aurora_gpu::inactive()", server_guard)
+        self.assertIn("role=integrated_server", tick)
+        self.assertIn("LOGGED.swap(true", tick)
         client_guard = tick.split("if !game.native_on(m::ID) {", 1)[1].split("}", 1)[0]
         self.assertIn("aurora_gpu::inactive()", client_guard)
         self.assertLess(tick.index("if !game.native_window() {"), tick.index("if !game.native_on(m::ID) {"))

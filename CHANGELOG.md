@@ -1,3 +1,19 @@
+# Unreleased v0.7.2 RC1 — ribbon quality integration candidate (PR #5)
+
+- WGPU Ribbon: shared endpoint frames across adjacent triangles, camera-facing sides with fallback, centripetal spline, adaptive 4–7 subdivisions per movement sample, clamped local overshoot.
+- Individual point-age fades with smooth entrance/exit and WGSL lateral alpha edges. Demo geometry retains a continuous time origin while client snapshots are temporarily stale.
+- Optional `AURORA_RIBBON_DIAG=1` life-cycle logs (client/server role, player available, publish sequence, animation epoch, dimension and GPU reset reasons). Diagnostics are off by default and transition-only.
+- Stabilized local ribbon frames with bounded parallel transport at near-collinear camera angles, with deterministic stress and full-path shared-join tests.
+- Added sparse opt-in CPU render-submission timing, vertex-peak, buffer-reallocation and GPU resource-recreation counters; these are not GPU timestamp measurements.
+- Corrected scene-depth projection by using Horizon's jittered world matrix; edge feather width now responds to screen-space derivatives (WGSL fwidth) rather than one fixed interpolation threshold.
+- Preallocated bounded CPU staging and GPU vertex buffers (8192 x 32-byte vertices = 256 KiB) when the renderer activates, avoiding growth during gameplay. No measured FPS claim.
+- PR CI now cancels superseded runs while preserving main-branch release builds.
+- Corrected Spectral Helix orientation: radial frames now follow world-space tangents and parallel transport, independent of camera translation. Added camera-switch invariance and near-vertical-path regressions.
+- Rebuilt Spectral Helix with two opposing circular offsets around the motion axis (sine + cosine radial motion), with a numerical strand-radius regression test.
+- Independent 24,000-step JS formula stress check passed for frame orthogonality and continuity (not a Rust or GPU runtime test).
+- Added native unit and offline Python regressions; see `docs/RIBBON_WINDOWS_ACCEPTANCE.md` for Windows singleplayer/multiplayer validation.
+- Status: candidate only; Linux native integration CI and real gameplay/benchmark evidence are required before promotion. No FPS claim.
+
 # 0.7.1-rc.1 — singleplayer ribbon stability hotfix
 
 - Fixed integrated-server native_tick clearing the process-shared GPU ribbon snapshot in singleplayer. Non-window/server game ticks now return without mutating client-owned GPU state.

@@ -1,6 +1,6 @@
 [mod]
 id = "aurora_visuals"
-version = "0.7.1"
+version = "0.7.2"
 priority = 100
 
 [compatibility]
