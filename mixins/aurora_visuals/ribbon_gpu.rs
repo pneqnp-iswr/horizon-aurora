@@ -518,6 +518,35 @@ mod tests {
         assert_eq!(&v[5][..3],&v[7][..3]);
     }
     #[test]
+    fn spectral_helix_centerline_is_camera_translation_invariant() {
+        let now=Instant::now();
+        let mut renderer=Renderer::default();
+        for i in 0..8 {
+            let t=i as f64*0.18;
+            renderer.points.push_back(Point{
+                at:[t,2.0+t*0.5,(t*1.2).sin()*0.3],
+                stamp:now-Duration::from_millis(100),
+            });
+        }
+        let snapshot=Snapshot{
+            position:Some([1.2,2.6,0.0]),dimension:7,
+            style:2,enabled:true,demo:false,sequence:1,updated:now,
+        };
+        let camera_a=DVec3::new(0.0,1.0,5.0);
+        let camera_b=DVec3::new(1.0,2.0,6.0);
+        renderer.build(camera_a,snapshot,now);
+        assert!(!renderer.staging.is_empty());
+        let first=renderer.strand_points.clone();
+        let full_vertex_count=renderer.staging.len();
+        renderer.build(camera_b,snapshot,now);
+        assert_eq!(full_vertex_count,renderer.staging.len());
+        assert_eq!(first.len(),renderer.strand_points.len());
+        let delta=Vec3::new(1.0,1.0,1.0);
+        for (a,b) in first.iter().zip(&renderer.strand_points){
+            assert!(((*a-*b)-delta).length()<1e-4);
+        }
+    }
+    #[test]
     fn helix_frame_does_not_depend_on_camera_position(){
         // The same world-space path must keep its helix phase when the camera
         // switches between third- and first-person perspectives.
