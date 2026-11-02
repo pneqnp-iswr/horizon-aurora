@@ -41,7 +41,10 @@ fn fs(input: VertexOut) -> @location(0) vec4<f32> {
     let world_z = textureLoad(scene_depth, texel, 0);
     let separation = input.position.z - world_z;
     let soft = clamp((separation + 0.0015) * 180.0, 0.0, 1.0);
-    let edge_alpha = 1.0 - smoothstep(0.72, 1.0, abs(input.edge));
+    // Screen-space derivative keeps the silhouette approximately pixel-smooth
+    // under camera zoom, resolution changes and different ribbon widths.
+    let feather = clamp(fwidth(input.edge) * 1.5, 0.04, 0.40);
+    let edge_alpha = 1.0 - smoothstep(1.0 - feather, 1.0, abs(input.edge));
     return vec4<f32>(input.tint.rgb, input.tint.a * soft * edge_alpha);
 }
 "#;
@@ -430,7 +433,8 @@ impl Renderer {
             });
         }
         let mut uniforms=[0.0_f32;20];
-        uniforms[..16].copy_from_slice(&world.view_proj.to_cols_array());
+        // Match the TAA-jittered geometry used to populate scene_depth.
+        uniforms[..16].copy_from_slice(&world.jittered.to_cols_array());
         uniforms[16]=world.size[0] as f32;uniforms[17]=world.size[1] as f32;
         world.queue.write_buffer(&gpu.uniform,0,bytemuck::cast_slice(&uniforms));
         world.queue.write_buffer(&gpu.vertices,0,bytemuck::cast_slice(&self.staging[..count]));
