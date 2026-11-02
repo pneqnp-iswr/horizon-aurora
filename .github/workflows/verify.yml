@@ -5,6 +5,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      gameplay_evidence_url:
+        description: "Link to Windows singleplayer/multiplayer gameplay acceptance evidence (GitHub issue or PR)"
+        required: true
+        type: string
 
 # Cancel superseded PR compilations, but never interrupt a main release run.
 concurrency:
@@ -72,13 +77,13 @@ jobs:
       - name: Collect verified source bundles
         run: |
           mkdir -p dist
-          cp /tmp/horizon-mods/native/target/aurora_visuals-0.7.1.hnmod dist/
-          cp shaderpacks/aurora_nebula-0.7.1.hshader dist/
+          cp /tmp/horizon-mods/native/target/aurora_visuals-0.7.2.hnmod dist/
+          cp shaderpacks/aurora_nebula-0.7.2.hshader dist/
           cd dist
           sha256sum *.hnmod *.hshader > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: aurora-v0.7.1-verified-bundles
+          name: aurora-v0.7.2-verified-bundles
           path: dist/*
           if-no-files-found: error
 
@@ -95,8 +100,9 @@ jobs:
         run: ./tests/windows-preflight-smoke.ps1
 
   publish-prerelease:
-    name: Publish tested source-bundle prerelease
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Publish reviewed gameplay-verified prerelease
+    # No automated release merely because CI succeeds after a merge.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.gameplay_evidence_url != ''
     needs: [source-and-integration, windows-preflight]
     runs-on: ubuntu-latest
     permissions:
@@ -104,13 +110,18 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: aurora-v0.7.1-verified-bundles
+          name: aurora-v0.7.2-verified-bundles
           path: dist
       - name: Publish only after all official integration checks succeed
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: v0.7.1-rc.1
+          TAG: v0.7.2-rc.1
+          EVIDENCE_URL: ${{ inputs.gameplay_evidence_url }}
         run: |
+          if [[ ! "$EVIDENCE_URL" =~ ^https://github[.]com/pneqnp-iswr/horizon-aurora/(issues|pull)/[0-9]+ ]]; then
+            echo "Provide the GitHub PR/issue containing documented Windows gameplay evidence."
+            exit 1
+          fi
           CURRENT_MAIN=$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')
           if [ "$CURRENT_MAIN" != "$GITHUB_SHA" ]; then
             echo "A newer main commit exists; skip stale pre-release $GITHUB_SHA"
@@ -123,6 +134,6 @@ jobs:
           gh release create "$TAG" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Aurora Visuals v0.7.1 RC1" \
+            --title "Aurora Visuals v0.7.2 RC1" \
             --prerelease \
-            --notes "Experimental Horizon native source bundle and WGSL shader pack. Official native integration and shader validation pass in CI; gameplay testing is still required. Do not install untrusted native code."
+            --notes "Experimental native source bundle and shader pack for Horizon API 58. Linux integration and Naga checks pass in CI. Windows gameplay acceptance evidence: $EVIDENCE_URL. Windows build/smoke testing and GPU performance results must be read from that evidence; the prerelease itself is not a stable guarantee. Native code executes with OS-user permissions."
