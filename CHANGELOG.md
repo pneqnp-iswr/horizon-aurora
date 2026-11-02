@@ -1,4 +1,4 @@
-# Unreleased — ribbon geometry and lifecycle integration candidate (PR #5)
+# Unreleased v0.7.2 RC1 — ribbon quality integration candidate (PR #5)
 
 - WGPU Ribbon: shared endpoint frames across adjacent triangles, camera-facing sides with fallback, centripetal spline, adaptive 4–7 subdivisions per movement sample, clamped local overshoot.
 - Individual point-age fades with smooth entrance/exit and WGSL lateral alpha edges. Demo geometry retains a continuous time origin while client snapshots are temporarily stale.
