@@ -24,7 +24,8 @@ gh workflow run verify.yml --repo pneqnp-iswr/horizon-aurora \
 ```
 
 GitHub requires the workflow file to be present on the default branch for manual dispatch registration; it exists there, and `--ref main` selects the version to execute. Never run this command before the documented Windows evidence is attached and reviewed. See the [official GitHub workflow dispatch guidance](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
- That workflow repeats the full verification and publishes the prerelease only when it is still targeting the current `main` commit. FPS or GPU claims require their own reproducible benchmarks, not just a green workflow.
+
+That workflow repeats the full verification and publishes the prerelease only when it is still targeting the current `main` commit. FPS or GPU claims require their own reproducible benchmarks, not just a green workflow.
 
 ## Workflow
 
