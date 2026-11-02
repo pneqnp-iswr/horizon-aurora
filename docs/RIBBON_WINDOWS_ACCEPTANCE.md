@@ -39,6 +39,10 @@ Use same Horizon revision, render distance, shader pack, resolution, GPU and sce
 - Select `/aurora ribbon-style spectral` with demo mode ON: confirm that two distinct strands rotate *around* the central path, at opposite phases, and don't collapse to one wobbling diagonal.
 - Confirm no asymmetric shimmer introduced by world `jittered` projection. Record videos with TAA enabled and disabled where available.
 
+## Buffer-allocation check
+
+With `AURORA_RIBBON_DIAG=1`, move and rotate continuously for at least 60 seconds. The ribbon pipeline should be allocated once after activation, and ordinary movement must not cause any vertex buffer reallocation. Check the `[aurora/ribbon/perf]` line after 3600 drawn frames. The new initial GPU vertex buffer reserves 256 KiB, not a full-screen render target. The log measures CPU submission only, not GPU execution time.
+
 ## Diagnostic evidence
 
 Capture the game's native log with `AURORA_RIBBON_DIAG=1`. Only transitions and GPU recreation should emit messages; a stable frame should not log per tick. Log entries include the `role=client`, `reason`, `epoch`, `sequence` and point count (when applicable).
