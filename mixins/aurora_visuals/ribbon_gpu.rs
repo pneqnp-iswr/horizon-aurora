@@ -173,19 +173,29 @@ fn centripetal(p0:[f64;3],p1:[f64;3],p2:[f64;3],p3:[f64;3],t:f64)->[f64;3] {
           (-2.0*t3+3.0*t2)*p2[i]+(t3-t2)*m2).clamp(p1[i].min(p2[i]),p1[i].max(p2[i]))
     })
 }
+// Transport the previous ribbon frame into the new tangent plane.
+// Only steer it toward the camera when that direction is well-defined;
+// this avoids the violent 180-degree flips at near camera/tangent alignment.
 fn stable_side(tangent:Vec3,at:Vec3,previous:Option<Vec3>)->Vec3 {
-    let mut side=tangent.cross((-at).normalize_or_zero()).normalize_or_zero();
-    if side.length_squared()<1e-6 {
-        if let Some(prev)=previous {side=(prev-tangent*prev.dot(tangent)).normalize_or_zero();}
+    let transported=previous
+        .map(|p|(p-tangent*p.dot(tangent)).normalize_or_zero())
+        .filter(|p|p.length_squared()>1e-6);
+    let raw_facing=tangent.cross((-at).normalize_or_zero());
+    let facing_quality=raw_facing.length_squared();
+    let facing=raw_facing.normalize_or_zero();
+    if let Some(prev)=transported {
+        if facing_quality < 1e-3 {return prev;}
+        let desired=if facing.dot(prev)<0.0 {-facing}else{facing};
+        // Maximum one-quarter correction at a sample; never make the local
+        // side perpendicular to its centerline via an unchecked miter.
+        return prev.lerp(desired,0.25).normalize_or_zero();
     }
-    if side.length_squared()<1e-6 {
-        for axis in [Vec3::Y,Vec3::X,Vec3::Z] {
-            side=tangent.cross(axis).normalize_or_zero();
-            if side.length_squared()>=1e-6 {break;}
-        }
+    if facing_quality>=1e-3 {return facing;}
+    for axis in [Vec3::Y,Vec3::X,Vec3::Z] {
+        let side=tangent.cross(axis).normalize_or_zero();
+        if side.length_squared()>1e-6 {return side;}
     }
-    if let Some(prev)=previous {if side.dot(prev)<0.0 {side=-side;}}
-    side
+    Vec3::X // guarded by tangent-length checks at the caller
 }
 fn diagnostics_enabled()->bool {
     static ON:OnceLock<bool>=OnceLock::new();
@@ -449,6 +459,30 @@ mod tests {
         ribbon_triangles(&mut v,b,d,s1,s2,c,c,0.4,0.2);
         assert_eq!(&v[2][..3],&v[6][..3]);
         assert_eq!(&v[5][..3],&v[7][..3]);
+    }
+    #[test]
+    fn frame_transport_stays_orthogonal_and_avoids_roll_flips(){
+        let mut previous=None;
+        for i in 0..128 {
+            let angle=(i as f32/127.0)*std::f32::consts::PI*1.85;
+            let tangent=Vec3::new(angle.cos(),0.20,angle.sin()).normalize();
+            // Probe camera alignment degeneracies as the path bends.
+            let at=-tangent*(1.0+(i as f32/127.0));
+            let side=stable_side(tangent,at,previous);
+            assert!(side.is_finite());
+            assert!((side.length()-1.0).abs()<1e-4);
+            assert!(side.dot(tangent).abs()<1e-4);
+            if let Some(last)=previous { assert!(side.dot(last)>-0.25); }
+            previous=Some(side);
+        }
+    }
+    #[test]
+    fn camera_facing_near_collinear_uses_transport(){
+        let tangent=Vec3::X;
+        let previous=Vec3::Y;
+        let side=stable_side(tangent,Vec3::new(-100.0,0.000001,0.0),Some(previous));
+        assert!(side.is_finite());
+        assert!(side.dot(previous)>0.99);
     }
     #[test]
     fn demo_animation_epoch_survives_sequential_client_snapshots() {
