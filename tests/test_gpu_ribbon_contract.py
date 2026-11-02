@@ -54,6 +54,12 @@ class NativeGpuRibbonContract(unittest.TestCase):
             "shader_location:2", "edge_alpha", "snapshot.updated",
             'reset_path("teleport")', 'reset_path("dimension_transition")',
             "AURORA_RIBBON_DIAG", "player_available=",
+            "frame_transport_stays_orthogonal_and_avoids_roll_flips",
+            "camera_facing_near_collinear_uses_transport",
+            "full_motion_strip_has_watertight_sample_joins",
+            "teleport_and_dimension_change_reset_path_once",
+            "perf_buffer_reallocs", "perf_gpu_recreates",
+            "cpu_submit_avg_us",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, gpu)
