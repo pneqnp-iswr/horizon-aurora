@@ -42,6 +42,8 @@ class NativeGpuRibbonContract(unittest.TestCase):
         self.assertNotIn("world.view_proj.to_cols_array()", gpu)
         self.assertNotIn("smoothstep(0.72, 1.0", gpu)
         self.assertNotIn("let wave=phase.sin()", gpu)
+        self.assertIn("let side=helix_side(axis,previous_helix_frame)", gpu)
+        self.assertNotIn("stable_side(axis,p,previous_helix_frame)", gpu)
         self.assertNotIn("native_flame_particle", gpu)
         self.assertNotRegex(gpu, r"(?m)^\s*#!")
         self.assertNotRegex(gpu, r"(?m)^\s*//!")
@@ -62,6 +64,10 @@ class NativeGpuRibbonContract(unittest.TestCase):
             "full_motion_strip_has_watertight_sample_joins",
             "teleport_and_dimension_change_reset_path_once",
             "perf_buffer_reallocs", "perf_gpu_recreates",
+            "spectral_helix_centerline_is_camera_translation_invariant",
+            "helix_frame_does_not_depend_on_camera_position",
+            "helix_basis_transports_through_near_vertical_motion",
+            "fn helix_side(",
             "spectral_helix_has_opposite_rotating_radial_strands",
             "fn helix_offset(", "helix_offset(axis,side,phase,0.20)",
             "cpu_submit_avg_us",
