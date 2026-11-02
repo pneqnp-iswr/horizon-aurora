@@ -126,6 +126,12 @@ struct Renderer {
     sides: Vec<Vec3>,
     demo_epoch: Option<Instant>,
     animation_epoch: u64,
+    perf_frames: u64,
+    perf_cpu_us_total: u128,
+    perf_cpu_us_max: u128,
+    perf_vertex_max: usize,
+    perf_buffer_reallocs: u64,
+    perf_gpu_recreates: u64,
     gpu: Option<Gpu>,
 }
 thread_local! { static RENDERER: RefCell<Renderer> = RefCell::new(Renderer::default()); }
@@ -322,11 +328,30 @@ impl Renderer {
             }
         }
     }
+    // CPU render-submission cost only; NOT the duration of GPU execution.
+    // Printed at most once per 3600 drawn frames and only with opt-in diagnostics.
+    fn record_frame(&mut self, started:Instant, vertices:usize) {
+        if !diagnostics_enabled() {return;}
+        let us=started.elapsed().as_micros();
+        self.perf_frames+=1;
+        self.perf_cpu_us_total+=us;
+        self.perf_cpu_us_max=self.perf_cpu_us_max.max(us);
+        self.perf_vertex_max=self.perf_vertex_max.max(vertices);
+        if self.perf_frames>=3600 {
+            eprintln!("[aurora/ribbon/perf] role=client frames={} cpu_submit_avg_us={} cpu_submit_max_us={} vertices_max={} vertex_buffer_reallocs={} gpu_recreates={} draw_calls={}",
+                self.perf_frames,self.perf_cpu_us_total/self.perf_frames as u128,
+                self.perf_cpu_us_max,self.perf_vertex_max,self.perf_buffer_reallocs,
+                self.perf_gpu_recreates,self.perf_frames);
+            self.perf_frames=0;self.perf_cpu_us_total=0;self.perf_cpu_us_max=0;
+            self.perf_vertex_max=0;self.perf_buffer_reallocs=0;self.perf_gpu_recreates=0;
+        }
+    }
     fn ensure_gpu(&mut self, world:&WorldDrawn<'_>) {
         let identity=world.device as *const wgpu::Device as usize;
         let replace=self.gpu.as_ref().is_none_or(|g|g.device_address!=identity||g.format!=world.color_format);
         if !replace {return;}
         self.gpu=None;
+        self.perf_gpu_recreates=self.perf_gpu_recreates.saturating_add(1);
         if diagnostics_enabled() {eprintln!("[aurora/ribbon] role=client reason=gpu_resources_recreated epoch={} sequence={}",self.animation_epoch,self.previous_sequence);}
         let device=world.device;
         let shader=device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -381,6 +406,7 @@ impl Renderer {
     }
     fn draw(&mut self,world:&mut WorldDrawn<'_>,snapshot:Snapshot) {
         let now=Instant::now();
+        let cpu_started=now;
         if !snapshot.enabled {
             self.reset_path("disabled");self.gpu=None;return;
         }
@@ -396,6 +422,7 @@ impl Renderer {
         let gpu=self.gpu.as_mut().expect("ensure_gpu initialized resources");
         let count=self.staging.len().min(VERTEX_LIMIT);
         if count>gpu.capacity {
+            self.perf_buffer_reallocs=self.perf_buffer_reallocs.saturating_add(1);
             gpu.capacity=count.next_power_of_two().min(VERTEX_LIMIT);
             gpu.vertices=world.device.create_buffer(&wgpu::BufferDescriptor {
                 label:Some("Aurora Ribbon expanded vertex buffer"),size:(gpu.capacity*32) as u64,
@@ -424,6 +451,8 @@ impl Renderer {
         pass.set_bind_group(0,&bind,&[]);
         pass.set_vertex_buffer(0,gpu.vertices.slice(..));
         pass.draw(0..count as u32,0..1);
+        drop(pass);
+        self.record_frame(cpu_started,count);
     }
 }
 pub fn draw(world:&mut WorldDrawn<'_>) {
@@ -459,6 +488,15 @@ mod tests {
         ribbon_triangles(&mut v,b,d,s1,s2,c,c,0.4,0.2);
         assert_eq!(&v[2][..3],&v[6][..3]);
         assert_eq!(&v[5][..3],&v[7][..3]);
+    }
+    #[test]
+    fn optional_perf_counters_do_not_change_disabled_render_state(){
+        // Logging is explicitly opt-in; counters never touch gameplay snapshots.
+        let renderer=Renderer::default();
+        assert_eq!(renderer.perf_frames,0);
+        assert_eq!(renderer.perf_buffer_reallocs,0);
+        assert_eq!(renderer.perf_gpu_recreates,0);
+        assert_eq!(renderer.animation_epoch,0);
     }
     #[test]
     fn frame_transport_stays_orthogonal_and_avoids_roll_flips(){
