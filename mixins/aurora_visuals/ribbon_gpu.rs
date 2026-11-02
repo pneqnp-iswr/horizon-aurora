@@ -490,6 +490,53 @@ mod tests {
         assert_eq!(&v[5][..3],&v[7][..3]);
     }
     #[test]
+    fn full_motion_strip_has_watertight_sample_joins(){
+        let now=Instant::now();
+        let mut renderer=Renderer::default();
+        for i in 0..POINT_LIMIT {
+            let t=i as f64*0.10;
+            renderer.points.push_back(Point {
+                at:[t,(t*0.8).sin()*0.3,(t*0.6).cos()*0.5],
+                stamp:now-Duration::from_millis((POINT_LIMIT-i) as u64*15),
+            });
+        }
+        let snapshot=Snapshot {
+            position:Some([7.0,0.0,0.0]),dimension:1,
+            style:0,enabled:true,demo:false,sequence:1,updated:now,
+        };
+        renderer.build(DVec3::new(4.0,2.0,7.0),snapshot,now);
+        let v=&renderer.staging;
+        assert!(!v.is_empty());
+        assert_eq!(v.len()%6,0);
+        assert!(v.len()<=VERTEX_LIMIT);
+        assert!(v.iter().all(|p|p.iter().all(|x|x.is_finite())));
+        for chunks in v.chunks_exact(6).collect::<Vec<_>>().windows(2) {
+            assert_eq!(&chunks[0][2][..3],&chunks[1][0][..3]);
+            assert_eq!(&chunks[0][5][..3],&chunks[1][1][..3]);
+        }
+    }
+    #[test]
+    fn teleport_and_dimension_change_reset_path_once(){
+        let now=Instant::now();
+        let mut renderer=Renderer::default();
+        let mut snapshot=Snapshot {
+            position:Some([0.0,1.0,0.0]),dimension:10,
+            style:0,enabled:true,demo:false,sequence:1,updated:now,
+        };
+        renderer.accept(snapshot,now);
+        snapshot.position=Some([0.2,1.0,0.0]);snapshot.sequence+=1;
+        renderer.accept(snapshot,now);
+        assert_eq!(renderer.points.len(),2);
+        snapshot.position=Some([30.0,1.0,0.0]);snapshot.sequence+=1;
+        renderer.accept(snapshot,now);
+        assert_eq!(renderer.points.len(),1);
+        assert_eq!(renderer.animation_epoch,1);
+        snapshot.dimension=11;snapshot.sequence+=1;
+        renderer.accept(snapshot,now);
+        assert_eq!(renderer.points.len(),1);
+        assert_eq!(renderer.animation_epoch,2);
+    }
+    #[test]
     fn optional_perf_counters_do_not_change_disabled_render_state(){
         // Logging is explicitly opt-in; counters never touch gameplay snapshots.
         let renderer=Renderer::default();
