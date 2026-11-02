@@ -118,7 +118,6 @@ struct Gpu {
     format: wgpu::TextureFormat,
     device_address: usize, // identity comparison only; never dereferenced
 }
-#[derive(Default)]
 struct Renderer {
     previous_sequence: u64,
     dimension: u64,
@@ -136,6 +135,23 @@ struct Renderer {
     perf_buffer_reallocs: u64,
     perf_gpu_recreates: u64,
     gpu: Option<Gpu>,
+}
+impl Default for Renderer {
+    fn default()->Self {
+        let samples=POINT_LIMIT*8;
+        Self {
+            previous_sequence:0,dimension:0,
+            points:VecDeque::with_capacity(POINT_LIMIT),
+            staging:Vec::with_capacity(VERTEX_LIMIT),
+            samples:Vec::with_capacity(samples),
+            strand_points:Vec::with_capacity(samples),
+            sides:Vec::with_capacity(samples),
+            demo_epoch:None,animation_epoch:0,
+            perf_frames:0,perf_cpu_us_total:0,perf_cpu_us_max:0,
+            perf_vertex_max:0,perf_buffer_reallocs:0,perf_gpu_recreates:0,
+            gpu:None,
+        }
+    }
 }
 thread_local! { static RENDERER: RefCell<Renderer> = RefCell::new(Renderer::default()); }
 
@@ -433,7 +449,9 @@ impl Renderer {
             label:Some("Aurora Ribbon camera uniforms"),size:80,
             usage:wgpu::BufferUsages::UNIFORM|wgpu::BufferUsages::COPY_DST,mapped_at_creation:false,
         });
-        let capacity=1024;
+        // 8192 vertices * 32 bytes = 256 KiB. Allocate once at activation,
+        // rather than reallocating the vertex buffer mid-combat.
+        let capacity=VERTEX_LIMIT;
         let vertices=device.create_buffer(&wgpu::BufferDescriptor {
             label:Some("Aurora Ribbon pooled vertices"),size:(capacity*32) as u64,
             usage:wgpu::BufferUsages::VERTEX|wgpu::BufferUsages::COPY_DST,mapped_at_creation:false,
@@ -674,6 +692,15 @@ mod tests {
         renderer.accept(snapshot,now);
         assert_eq!(renderer.points.len(),1);
         assert_eq!(renderer.animation_epoch,2);
+    }
+    #[test]
+    fn geometry_staging_is_preallocated_and_bounded(){
+        let r=Renderer::default();
+        assert!(r.staging.capacity()>=VERTEX_LIMIT);
+        assert!(r.samples.capacity()>=POINT_LIMIT*8);
+        assert!(r.strand_points.capacity()>=POINT_LIMIT*8);
+        assert!(r.sides.capacity()>=POINT_LIMIT*8);
+        assert!(r.points.capacity()>=POINT_LIMIT);
     }
     #[test]
     fn optional_perf_counters_do_not_change_disabled_render_state(){
