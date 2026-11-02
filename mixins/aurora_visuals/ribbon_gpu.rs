@@ -213,11 +213,17 @@ fn helix_side(tangent:Vec3,previous:Option<Vec3>)->Vec3 {
         let projected=(old-tangent*old.dot(tangent)).normalize_or_zero();
         if projected.length_squared()>1e-6 {return projected;}
     }
-    // A hard X/Y axis switch makes the helix jump in orientation around
-    // nearly vertical motion. Blend the seed smoothly instead.
-    let weight=smooth01((tangent.dot(Vec3::Y).abs()-0.80)/0.18);
-    let reference=Vec3::Y.lerp(Vec3::X,weight);
-    (reference-tangent*reference.dot(tangent)).normalize_or_zero()
+    // Shortest-arc rotation of world +Y onto this tangent, applied to +X.
+    // Unlike blending a reference vector, it never goes parallel to the
+    // tangent while approaching the +Y pole (common for jump/flight trails).
+    let c=tangent.dot(Vec3::Y);
+    if c < -0.9999 {
+        // The antiparallel rotation is not unique; use a bounded fallback.
+        return (Vec3::X-tangent*tangent.x).normalize_or_zero();
+    }
+    let v=Vec3::Y.cross(tangent);
+    let x=Vec3::X;
+    (x+v.cross(x)+v.cross(v.cross(x))*(1.0/(1.0+c))).normalize_or_zero()
 }
 fn helix_offset(tangent:Vec3,side:Vec3,phase:f32,radius:f32)->Vec3 {
     let bitangent=tangent.cross(side).normalize_or_zero();
@@ -562,6 +568,17 @@ mod tests {
             let offset=helix_offset(tangent,basis,phase,0.2);
             assert!((offset.length()-0.2).abs()<1e-5);
             assert!(offset.dot(tangent).abs()<1e-5);
+        }
+    }
+    #[test]
+    fn world_helix_seed_is_finite_at_vertical_poles(){
+        for tangent in [Vec3::Y,-Vec3::Y,
+                        Vec3::new(0.00001,0.999999,0.0).normalize(),
+                        Vec3::new(0.00001,-0.999999,0.0).normalize()] {
+            let side=helix_side(tangent,None);
+            assert!(side.is_finite());
+            assert!((side.length()-1.0).abs()<1e-5);
+            assert!(side.dot(tangent).abs()<1e-5);
         }
     }
     #[test]
