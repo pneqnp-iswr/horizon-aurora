@@ -13,7 +13,18 @@ Never call a packaged `.hnmod` a precompiled binary: it is a native source bundl
 
 The upcoming v0.7.2 candidate uses a **new release tag** (`v0.7.2-rc.1`) and never overwrites old v0.7.1 assets. PR CI builds and verifies the source-format `.hnmod` and shader pack, but **does not publish a release** on merge or PR completion.
 
-After the official pinned Horizon integration build passes, a maintainer must supply actual Windows singleplayer and multiplayer acceptance evidence in a GitHub issue or PR, using `docs/RIBBON_WINDOWS_ACCEPTANCE.md`. Only then dispatch `Verify Aurora native mod` on `main` with the required `gameplay_evidence_url` input. That workflow repeats the full verification and publishes the prerelease only when it is still targeting the current `main` commit. FPS or GPU claims require their own reproducible benchmarks, not just a green workflow.
+After the official pinned Horizon integration build passes, a maintainer must supply actual Windows singleplayer and multiplayer acceptance evidence in a GitHub issue or PR, using `docs/RIBBON_WINDOWS_ACCEPTANCE.md`. Only then dispatch `Verify Aurora native mod` on `main` with the required `gameplay_evidence_url` input.
+
+As the repository currently has `master` configured as its default branch while this project targets `main`, prefer an explicit branch-scoped GitHub CLI dispatch after the acceptance evidence has been reviewed:
+
+```bash
+gh workflow run verify.yml --repo pneqnp-iswr/horizon-aurora \
+  --ref main \
+  -f gameplay_evidence_url=https://github.com/pneqnp-iswr/horizon-aurora/issues/6
+```
+
+GitHub requires the workflow file to be present on the default branch for manual dispatch registration; it exists there, and `--ref main` selects the version to execute. Never run this command before the documented Windows evidence is attached and reviewed. See the [official GitHub workflow dispatch guidance](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
+ That workflow repeats the full verification and publishes the prerelease only when it is still targeting the current `main` commit. FPS or GPU claims require their own reproducible benchmarks, not just a green workflow.
 
 ## Workflow
 
