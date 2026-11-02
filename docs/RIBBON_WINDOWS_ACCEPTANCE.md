@@ -31,6 +31,13 @@ Test each line in **singleplayer and multiplayer** after enabling `/aurora ribbo
 
 Use same Horizon revision, render distance, shader pack, resolution, GPU and scene for baseline vs Aurora comparisons.
 
+## New visual regression checks
+
+- Enable TAA and compare ribbon/terrain intersections at a fixed camera and moving camera. The depth-aware edge must remain aligned with world geometry; repeat at lower render resolution.
+- Switch between first and third person, and resize the game: screen-space antialiasing must look comparable in apparent pixel width.
+- Select `/aurora ribbon-style spectral` with demo mode ON: confirm that two distinct strands rotate *around* the central path, at opposite phases, and don't collapse to one wobbling diagonal.
+- Confirm no asymmetric shimmer introduced by world `jittered` projection. Record videos with TAA enabled and disabled where available.
+
 ## Diagnostic evidence
 
 Capture the game's native log with `AURORA_RIBBON_DIAG=1`. Only transitions and GPU recreation should emit messages; a stable frame should not log per tick. Log entries include the `role=client`, `reason`, `epoch`, `sequence` and point count (when applicable).
