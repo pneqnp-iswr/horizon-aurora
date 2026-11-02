@@ -206,6 +206,16 @@ fn stable_side(tangent:Vec3,at:Vec3,previous:Option<Vec3>)->Vec3 {
     }
     Vec3::X // guarded by tangent-length checks at the caller
 }
+// A world-oriented helix must NOT rotate when only the viewer moves.
+// Transport the radial basis along the trail, independent of camera position.
+fn helix_side(tangent:Vec3,previous:Option<Vec3>)->Vec3 {
+    if let Some(old)=previous {
+        let projected=(old-tangent*old.dot(tangent)).normalize_or_zero();
+        if projected.length_squared()>1e-6 {return projected;}
+    }
+    let reference=if tangent.dot(Vec3::Y).abs()>0.92 {Vec3::X} else {Vec3::Y};
+    (reference-tangent*reference.dot(tangent)).normalize_or_zero()
+}
 fn helix_offset(tangent:Vec3,side:Vec3,phase:f32,radius:f32)->Vec3 {
     let bitangent=tangent.cross(side).normalize_or_zero();
     side*(phase.cos()*radius)+bitangent*(phase.sin()*radius)
@@ -310,7 +320,7 @@ impl Renderer {
                     let next=self.samples[(i+1).min(self.samples.len()-1)].0;
                     let axis=(next-prev).normalize_or_zero();
                     let axis=if axis.length_squared()>1e-8 {axis}else{Vec3::Y};
-                    let side=stable_side(axis,p,previous_helix_frame);
+                    let side=helix_side(axis,previous_helix_frame);
                     previous_helix_frame=Some(side);
                     // A true pair of counterposed strands winds in TWO radial
                     // axes around the trail centerline, not along one sine axis.
@@ -506,6 +516,34 @@ mod tests {
         ribbon_triangles(&mut v,b,d,s1,s2,c,c,0.4,0.2);
         assert_eq!(&v[2][..3],&v[6][..3]);
         assert_eq!(&v[5][..3],&v[7][..3]);
+    }
+    #[test]
+    fn helix_frame_does_not_depend_on_camera_position(){
+        // The same world-space path must keep its helix phase when the camera
+        // switches between third- and first-person perspectives.
+        let tangent=Vec3::new(0.4,0.5,0.76).normalize();
+        let basis=helix_side(tangent,None);
+        assert!(basis.is_finite());
+        assert!((basis.length()-1.0).abs()<1e-5);
+        assert!(basis.dot(tangent).abs()<1e-5);
+        for phase in [0.0,1.0,2.3,3.5,5.0] {
+            let offset=helix_offset(tangent,basis,phase,0.2);
+            assert!((offset.length()-0.2).abs()<1e-5);
+            assert!(offset.dot(tangent).abs()<1e-5);
+        }
+    }
+    #[test]
+    fn helix_basis_transports_through_near_vertical_motion(){
+        let mut previous=None;
+        for i in 0..128 {
+            let a=i as f32/127.0*std::f32::consts::PI;
+            let tangent=Vec3::new(a.sin()*0.2,a.cos(),a.sin()*0.98).normalize();
+            let side=helix_side(tangent,previous);
+            assert!(side.is_finite());
+            assert!((side.length()-1.0).abs()<1e-4);
+            assert!(side.dot(tangent).abs()<1e-4);
+            previous=Some(side);
+        }
     }
     #[test]
     fn spectral_helix_has_opposite_rotating_radial_strands(){
