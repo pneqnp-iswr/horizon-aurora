@@ -29,7 +29,7 @@ class NativeGpuRibbonContract(unittest.TestCase):
     def test_real_vertex_pipeline_and_depth_semantics(self):
         gpu = (MOD / "ribbon_gpu.rs").read_text()
         for marker in (
-            "create_render_pipeline(", "pass.draw(", "view_proj.to_cols_array()",
+            "create_render_pipeline(", "pass.draw(", "jittered.to_cols_array()", "fwidth(input.edge)",
             "WorldDrawn<'_>", "world_depth = true", "reversed depth",
             "textureLoad(scene_depth", "TextureSampleType::Depth",
             "ALPHA_BLENDING", "POINT_LIMIT: usize = 72",
@@ -39,6 +39,8 @@ class NativeGpuRibbonContract(unittest.TestCase):
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, gpu)
+        self.assertNotIn("world.view_proj.to_cols_array()", gpu)
+        self.assertNotIn("smoothstep(0.72, 1.0", gpu)
         self.assertNotIn("native_flame_particle", gpu)
         self.assertNotRegex(gpu, r"(?m)^\s*#!")
         self.assertNotRegex(gpu, r"(?m)^\s*//!")
