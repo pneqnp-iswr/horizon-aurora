@@ -213,7 +213,10 @@ fn helix_side(tangent:Vec3,previous:Option<Vec3>)->Vec3 {
         let projected=(old-tangent*old.dot(tangent)).normalize_or_zero();
         if projected.length_squared()>1e-6 {return projected;}
     }
-    let reference=if tangent.dot(Vec3::Y).abs()>0.92 {Vec3::X} else {Vec3::Y};
+    // A hard X/Y axis switch makes the helix jump in orientation around
+    // nearly vertical motion. Blend the seed smoothly instead.
+    let weight=smooth01((tangent.dot(Vec3::Y).abs()-0.80)/0.18);
+    let reference=Vec3::Y.lerp(Vec3::X,weight);
     (reference-tangent*reference.dot(tangent)).normalize_or_zero()
 }
 fn helix_offset(tangent:Vec3,side:Vec3,phase:f32,radius:f32)->Vec3 {
@@ -559,6 +562,23 @@ mod tests {
             let offset=helix_offset(tangent,basis,phase,0.2);
             assert!((offset.length()-0.2).abs()<1e-5);
             assert!(offset.dot(tangent).abs()<1e-5);
+        }
+    }
+    #[test]
+    fn helix_frame_seed_changes_smoothly_around_vertical_path(){
+        let mut previous=None;
+        for i in 0..500 {
+            // Crossing the previous hard .92 dot threshold must not rotate
+            // the initial radial seed by an entire right angle.
+            let y=0.75+i as f32/499.0*0.245;
+            let tangent=Vec3::new((1.0-y*y).sqrt(),y,0.0);
+            let seed=helix_side(tangent,None);
+            assert!(seed.is_finite());
+            assert!((seed.length()-1.0).abs()<1e-4);
+            if let Some(prior)=previous {
+                assert!(seed.dot(prior)>0.985,"discontinuous helix seed at y={}",y);
+            }
+            previous=Some(seed);
         }
     }
     #[test]
