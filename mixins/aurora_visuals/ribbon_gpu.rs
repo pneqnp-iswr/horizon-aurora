@@ -206,6 +206,10 @@ fn stable_side(tangent:Vec3,at:Vec3,previous:Option<Vec3>)->Vec3 {
     }
     Vec3::X // guarded by tangent-length checks at the caller
 }
+fn helix_offset(tangent:Vec3,side:Vec3,phase:f32,radius:f32)->Vec3 {
+    let bitangent=tangent.cross(side).normalize_or_zero();
+    side*(phase.cos()*radius)+bitangent*(phase.sin()*radius)
+}
 fn diagnostics_enabled()->bool {
     static ON:OnceLock<bool>=OnceLock::new();
     *ON.get_or_init(||std::env::var("AURORA_RIBBON_DIAG").as_deref()==Ok("1"))
@@ -298,11 +302,21 @@ impl Renderer {
         let strands=if snapshot.style==2 {2}else{1};
         for strand in 0..strands {
             self.strand_points.clear();self.sides.clear();
-            for &(p,t,_) in &self.samples {
+            let mut previous_helix_frame:Option<Vec3>=None;
+            for i in 0..self.samples.len() {
+                let (p,t,_)=self.samples[i];
                 let p=if snapshot.style==2 {
-                    let phase=t*std::f32::consts::TAU*3.0+strand as f32*std::f32::consts::PI;
-                    let wave=phase.sin();
-                    p+Vec3::new(wave*0.18,wave*0.24,-wave*0.18)
+                    let prev=self.samples[i.saturating_sub(1)].0;
+                    let next=self.samples[(i+1).min(self.samples.len()-1)].0;
+                    let axis=(next-prev).normalize_or_zero();
+                    let axis=if axis.length_squared()>1e-8 {axis}else{Vec3::Y};
+                    let side=stable_side(axis,p,previous_helix_frame);
+                    previous_helix_frame=Some(side);
+                    // A true pair of counterposed strands winds in TWO radial
+                    // axes around the trail centerline, not along one sine axis.
+                    let phase=t*std::f32::consts::TAU*3.0
+                        +strand as f32*std::f32::consts::PI;
+                    p+helix_offset(axis,side,phase,0.20)
                 }else{p};
                 self.strand_points.push(p);
             }
@@ -492,6 +506,23 @@ mod tests {
         ribbon_triangles(&mut v,b,d,s1,s2,c,c,0.4,0.2);
         assert_eq!(&v[2][..3],&v[6][..3]);
         assert_eq!(&v[5][..3],&v[7][..3]);
+    }
+    #[test]
+    fn spectral_helix_has_opposite_rotating_radial_strands(){
+        let axis=Vec3::Z;
+        let side=Vec3::X;
+        let mut distinct=Vec::new();
+        for i in 0..16 {
+            let phase=i as f32/15.0*std::f32::consts::TAU;
+            let a=helix_offset(axis,side,phase,0.2);
+            let b=helix_offset(axis,side,phase+std::f32::consts::PI,0.2);
+            assert!((a+b).length()<1e-5);
+            assert!((a.length()-0.2).abs()<1e-5);
+            distinct.push(a);
+        }
+        // The 3D strand must rotate in two independent radial axes.
+        assert!(distinct.iter().any(|v|v.x.abs()>0.15));
+        assert!(distinct.iter().any(|v|v.y.abs()>0.15));
     }
     #[test]
     fn full_motion_strip_has_watertight_sample_joins(){
