@@ -6,6 +6,7 @@
 - Stabilized local ribbon frames with bounded parallel transport at near-collinear camera angles, with deterministic stress and full-path shared-join tests.
 - Added sparse opt-in CPU render-submission timing, vertex-peak, buffer-reallocation and GPU resource-recreation counters; these are not GPU timestamp measurements.
 - Corrected scene-depth projection by using Horizon's jittered world matrix; edge feather width now responds to screen-space derivatives (WGSL fwidth) rather than one fixed interpolation threshold.
+- Corrected Spectral Helix orientation: radial frames now follow world-space tangents and parallel transport, independent of camera translation. Added camera-switch invariance and near-vertical-path regressions.
 - Rebuilt Spectral Helix with two opposing circular offsets around the motion axis (sine + cosine radial motion), with a numerical strand-radius regression test.
 - Independent 24,000-step JS formula stress check passed for frame orthogonality and continuity (not a Rust or GPU runtime test).
 - Added native unit and offline Python regressions; see `docs/RIBBON_WINDOWS_ACCEPTANCE.md` for Windows singleplayer/multiplayer validation.
